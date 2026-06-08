@@ -1,0 +1,53 @@
+/**
+ * Symbol definition system.
+ * Symbol types are NOT hard-coded into the engine — a symbol declares its
+ * behavioural roles through the `type` array and optional `properties`.
+ */
+
+export type SymbolType =
+  | 'normal'
+  | 'wild'
+  | 'scatter'
+  | 'bonus'
+  | 'collector'
+  | 'multiplier'
+  | 'transform'
+  | 'mystery'
+  | 'expanding'
+  | 'sticky';
+
+export interface SymbolDefinition {
+  id: string;
+  name: string;
+  image?: string;
+
+  /** Behavioural roles. A symbol may have several, e.g. ['wild','expanding']. */
+  type: SymbolType[];
+
+  /** Base weight used by weight-based math mode. */
+  weight: number;
+
+  /** Optional separate weight for stacked appearance. */
+  stackWeight?: number;
+
+  /**
+   * Payout table indexed by (matchCount - minMatch).
+   * e.g. for a payline game minMatch=3, payout[0] = pay for 3 of a kind.
+   */
+  payout: number[];
+
+  /** Arbitrary tags consumed by feature plugins (e.g. 'persistent', 'gold'). */
+  properties?: string[];
+}
+
+/** Wild engine configuration, fully decoupled from symbol definitions. */
+export interface WildConfig {
+  /** Symbol ids this wild substitutes for. Use ['*'] to substitute all payable symbols. */
+  substituteSymbols: string[];
+  /** Win multiplier applied when this wild participates in a win. */
+  multiplier?: number;
+  /** Whether the wild expands to fill its whole reel. */
+  expand?: boolean;
+  /** Whether the wild sticks across cascades / respins. */
+  sticky?: boolean;
+}
