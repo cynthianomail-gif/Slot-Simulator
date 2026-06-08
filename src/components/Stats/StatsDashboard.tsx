@@ -38,7 +38,7 @@ export function StatsDashboard() {
   };
 
   return (
-    <Card className="flex h-full flex-col">
+    <Card className="flex flex-col">
       <CardHeader className="flex-row items-center justify-between">
         <CardTitle>統計</CardTitle>
         <div className="flex items-center gap-1">
@@ -48,7 +48,7 @@ export function StatsDashboard() {
           <Button variant="ghost" size="sm" onClick={clearStats}>重置</Button>
         </div>
       </CardHeader>
-      <CardContent className="flex-1 space-y-3 overflow-y-auto">
+      <CardContent className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
           <Stat
             label="實際 RTP"

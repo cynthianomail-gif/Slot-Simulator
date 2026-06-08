@@ -49,9 +49,7 @@ export default function App() {
 
         {/* Right: stats + debug */}
         <div className="flex min-h-0 flex-col gap-3 overflow-y-auto border-l border-border p-3">
-          <div className="min-h-0 flex-1">
-            <StatsDashboard />
-          </div>
+          <StatsDashboard />
           <DebugPanel />
         </div>
       </div>
