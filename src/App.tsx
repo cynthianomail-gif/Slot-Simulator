@@ -34,7 +34,7 @@ export default function App() {
       </header>
 
       {/* Main 3-column layout */}
-      <div className="grid min-h-0 flex-1 grid-cols-[360px_1fr_340px]">
+      <div className="grid min-h-0 flex-1 grid-cols-[360px_1fr_340px] grid-rows-[minmax(0,1fr)]">
         {/* Left: config */}
         <ConfigPanel />
 
