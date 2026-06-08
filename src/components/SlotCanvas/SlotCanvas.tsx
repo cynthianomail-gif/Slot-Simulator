@@ -56,6 +56,15 @@ export function SlotCanvas() {
   const at = (ms: number, fn: () => void) => timers.current.push(window.setTimeout(fn, ms));
 
   const tile = (id: string, win = false) => {
+    if (!id) {
+      // empty slot — used by the cascade/flip intro before symbols appear
+      return (
+        <div
+          style={{ width: size, height: size }}
+          className="rounded-lg bg-background/30 ring-2 ring-inset ring-border/40"
+        />
+      );
+    }
     const style = symbolStyle(idx.get(id), id);
     return (
       <div
@@ -95,16 +104,23 @@ export function SlotCanvas() {
     setWinHi(new Set());
     setRemoving(new Set());
     setDropStep(0);
-    // Put the landed board underneath the spinning overlay right away, so when
-    // the reels lift there is no transition gap to flash a different board.
-    setCells(target0.map((c) => [...c]));
+    // Base layer under the spinning overlay. Reel modes drop the final board in
+    // immediately (it stays hidden behind the overlay) so the reveal can never
+    // flash a different board. Cascade and flip must read as EMPTY until their
+    // symbols physically drop / flip in.
+    const emptyBase = p.mode === 'cascading' || p.mode === 'flipping';
+    setCells(
+      emptyBase ? target0.map((c) => c.map(() => '')) : target0.map((c) => [...c]),
+    );
+
+    const totalCells = target0.reduce((n, c) => n + c.length, 0);
 
     // when does the intro reveal finish (ms)
     let introMs: number;
     if (p.mode === 'rolling') introMs = (colsN - 1) * p.stopIntervalMs + p.spinTimeMs + p.bounceMs + 60;
-    else if (p.mode === 'flipping') introMs = (colsN - 1) * p.stopIntervalMs + (rowsMax - 1) * 60 + 360;
+    else if (p.mode === 'flipping') introMs = (totalCells - 1) * p.stopIntervalMs + 440;
     else if (p.mode === 'cascading') introMs = (colsN - 1) * p.stopIntervalMs * 0.4 + (rowsMax - 1) * 55 + 520;
-    else introMs = p.spinTimeMs * 1.95 + 120; // independent
+    else introMs = p.spinTimeMs + (totalCells - 1) * p.stopIntervalMs + p.bounceMs + 60; // independent
 
     const finish = () => {
       clearAll();
@@ -207,6 +223,7 @@ export function SlotCanvas() {
                 key={ci}
                 colArr={colArr}
                 ci={ci}
+                totalCols={presentation.steps[0].grid.columns.length}
                 mode={mode}
                 size={size}
                 gap={gap}
@@ -228,6 +245,7 @@ export function SlotCanvas() {
 interface IntroColumnProps {
   colArr: string[];
   ci: number;
+  totalCols: number;
   mode: AnimationType;
   size: number;
   gap: number;
@@ -237,17 +255,19 @@ interface IntroColumnProps {
   tile: (id: string, win?: boolean) => ReactNode;
 }
 
-function IntroColumn({ colArr, ci, mode, size, gap, spinTime, stopInterval, pool, tile }: IntroColumnProps) {
+function IntroColumn({ colArr, ci, totalCols, mode, size, gap, spinTime, stopInterval, pool, tile }: IntroColumnProps) {
   const rows = colArr.length;
 
   if (mode === 'rolling') {
+    // Every reel STARTS at the same instant; each one spins stopInterval longer
+    // than the reel to its left, so they STOP one after another left→right.
     return (
       <ReelStrip
         target={colArr}
         size={size}
         gap={gap}
-        delayMs={ci * stopInterval}
-        durationMs={spinTime}
+        delayMs={0}
+        durationMs={spinTime + ci * stopInterval}
         pool={pool}
         tile={tile}
       />
@@ -255,18 +275,21 @@ function IntroColumn({ colArr, ci, mode, size, gap, spinTime, stopInterval, pool
   }
 
   if (mode === 'independent') {
+    // Each cell is its own little reel. They all start together and stop one at
+    // a time in reading order — top-left first, across each row.
     return (
       <div className="flex flex-col justify-center" style={{ gap }}>
         {Array.from({ length: rows }).map((_, i) => {
-          const row = rows - 1 - i;
+          const row = rows - 1 - i; // i = visual position from the top
+          const order = i * totalCols + ci; // reading-order index
           return (
             <ReelStrip
               key={i}
               target={[colArr[row]]}
               size={size}
               gap={gap}
-              delayMs={Math.random() * spinTime * 0.5}
-              durationMs={spinTime * (0.8 + Math.random() * 0.7)}
+              delayMs={0}
+              durationMs={spinTime + order * stopInterval}
               pool={pool}
               tile={tile}
             />
@@ -277,27 +300,28 @@ function IntroColumn({ colArr, ci, mode, size, gap, spinTime, stopInterval, pool
   }
 
   if (mode === 'flipping') {
+    // Cards begin face-DOWN (blank back). They flip over one at a time in
+    // reading order to reveal the symbol underneath.
     return (
       <div className="flex flex-col justify-center" style={{ gap }}>
         {Array.from({ length: rows }).map((_, i) => {
           const row = rows - 1 - i;
+          const order = i * totalCols + ci;
           return (
-            <motion.div
+            <FlipCard
               key={i}
-              style={{ perspective: 500 }}
-              initial={{ rotateX: 90, opacity: 0 }}
-              animate={{ rotateX: 0, opacity: 1 }}
-              transition={{ delay: (ci * stopInterval + i * 60) / 1000, duration: 0.34, ease: 'easeOut' }}
-            >
-              {tile(colArr[row])}
-            </motion.div>
+              id={colArr[row]}
+              size={size}
+              delayMs={order * stopInterval}
+              tile={tile}
+            />
           );
         })}
       </div>
     );
   }
 
-  // cascading drop
+  // cascading drop — base board is empty; symbols fall in from above.
   return (
     <div className="flex flex-col justify-center" style={{ gap }}>
       {Array.from({ length: rows }).map((_, i) => {
@@ -313,6 +337,54 @@ function IntroColumn({ colArr, ci, mode, size, gap, spinTime, stopInterval, pool
           </motion.div>
         );
       })}
+    </div>
+  );
+}
+
+/* ----------------------- a single flip card (back → symbol) --------------- */
+
+interface FlipCardProps {
+  id: string;
+  size: number;
+  delayMs: number;
+  tile: (id: string, win?: boolean) => ReactNode;
+}
+
+function FlipCard({ id, size, delayMs, tile }: FlipCardProps) {
+  return (
+    <div style={{ perspective: 600, width: size, height: size }}>
+      <motion.div
+        style={{ position: 'relative', width: size, height: size, transformStyle: 'preserve-3d' }}
+        initial={{ rotateY: 0 }}
+        animate={{ rotateY: 180 }}
+        transition={{ delay: delayMs / 1000, duration: 0.42, ease: 'easeInOut' }}
+      >
+        {/* face-down back (blank) — visible before the flip */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backfaceVisibility: 'hidden',
+            WebkitBackfaceVisibility: 'hidden',
+            fontSize: size * 0.42,
+          }}
+          className="flex items-center justify-center rounded-lg bg-gradient-to-br from-slate-600 to-slate-800 text-slate-400 shadow-md ring-2 ring-inset ring-slate-500/60"
+        >
+          ◇
+        </div>
+        {/* symbol face — pre-rotated so it reads upright once flipped in */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            transform: 'rotateY(180deg)',
+            backfaceVisibility: 'hidden',
+            WebkitBackfaceVisibility: 'hidden',
+          }}
+        >
+          {tile(id)}
+        </div>
+      </motion.div>
     </div>
   );
 }
