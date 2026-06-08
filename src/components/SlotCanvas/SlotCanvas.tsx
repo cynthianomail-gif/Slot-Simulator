@@ -95,6 +95,9 @@ export function SlotCanvas() {
     setWinHi(new Set());
     setRemoving(new Set());
     setDropStep(0);
+    // Put the landed board underneath the spinning overlay right away, so when
+    // the reels lift there is no transition gap to flash a different board.
+    setCells(target0.map((c) => [...c]));
 
     // when does the intro reveal finish (ms)
     let introMs: number;
@@ -156,9 +159,49 @@ export function SlotCanvas() {
 
   return (
     <div className="flex h-full w-full items-center justify-center p-4">
-      <div className="rounded-xl border border-border bg-background/40 p-3">
-        {showIntro && presentation ? (
-          <div key={presentation.id} className="flex" style={{ gap }}>
+      <div className="relative rounded-xl border border-border bg-background/40 p-3">
+        {/* Settled board — always rendered as the base layer. The spinning
+            overlay below covers it until the reels land, so revealing it can
+            never flash a different board. */}
+        <div className="flex" style={{ gap }}>
+          {cells.map((column, col) => (
+            <div key={col} className="flex flex-col justify-center" style={{ gap }}>
+              {Array.from({ length: column.length }).map((_, i) => {
+                const row = column.length - 1 - i; // top first
+                const key = `${col}:${row}`;
+                const id = column[row];
+                const isWin = winHi.has(key);
+                const isRem = removing.has(key);
+                return (
+                  <motion.div
+                    key={`${key}:${dropStep}`}
+                    initial={dropStep > 0 ? { y: -(size + gap) * 1.3, opacity: 0 } : false}
+                    animate={
+                      isRem
+                        ? { scale: 0, opacity: 0, rotate: 10 }
+                        : { y: 0, opacity: 1, scale: isWin ? 1.12 : 1 }
+                    }
+                    transition={
+                      isRem
+                        ? { duration: 0.18 }
+                        : dropStep > 0
+                          ? { type: 'spring', stiffness: 460, damping: 22, delay: i * 0.03 }
+                          : { type: 'spring', stiffness: 340, damping: 24 }
+                    }
+                    className={cn('relative', isWin && 'z-10')}
+                  >
+                    {tile(id, isWin)}
+                  </motion.div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+
+        {/* Spinning reels — overlaid exactly on top of the settled board
+            (left/top match the container's p-3 padding). */}
+        {showIntro && presentation && (
+          <div key={presentation.id} className="absolute left-3 top-3 flex" style={{ gap }}>
             {presentation.steps[0].grid.columns.map((colArr, ci) => (
               <IntroColumn
                 key={ci}
@@ -172,41 +215,6 @@ export function SlotCanvas() {
                 pool={pool}
                 tile={tile}
               />
-            ))}
-          </div>
-        ) : (
-          <div className="flex" style={{ gap }}>
-            {cells.map((column, col) => (
-              <div key={col} className="flex flex-col justify-center" style={{ gap }}>
-                {Array.from({ length: column.length }).map((_, i) => {
-                  const row = column.length - 1 - i; // top first
-                  const key = `${col}:${row}`;
-                  const id = column[row];
-                  const isWin = winHi.has(key);
-                  const isRem = removing.has(key);
-                  return (
-                    <motion.div
-                      key={`${key}:${dropStep}`}
-                      initial={dropStep > 0 ? { y: -(size + gap) * 1.3, opacity: 0 } : false}
-                      animate={
-                        isRem
-                          ? { scale: 0, opacity: 0, rotate: 10 }
-                          : { y: 0, opacity: 1, scale: isWin ? 1.12 : 1 }
-                      }
-                      transition={
-                        isRem
-                          ? { duration: 0.18 }
-                          : dropStep > 0
-                            ? { type: 'spring', stiffness: 460, damping: 22, delay: i * 0.03 }
-                            : { type: 'spring', stiffness: 340, damping: 24 }
-                      }
-                      className={cn('relative', isWin && 'z-10')}
-                    >
-                      {tile(id, isWin)}
-                    </motion.div>
-                  );
-                })}
-              </div>
             ))}
           </div>
         )}
