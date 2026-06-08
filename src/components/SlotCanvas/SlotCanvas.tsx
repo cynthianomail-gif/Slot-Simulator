@@ -24,6 +24,7 @@ import type { AnimationType } from '@/types';
  */
 
 const FILLER = 16; // number of blur-by symbols on a spinning reel strip
+const HEAD = 2; // filler kept above the result so the bounce never exposes the board
 
 export function SlotCanvas() {
   const config = useGameStore((s) => s.config);
@@ -321,16 +322,25 @@ function IntroColumn({ colArr, ci, totalCols, mode, size, gap, spinTime, stopInt
     );
   }
 
-  // cascading drop — base board is empty; symbols fall in from above.
+  // cascading drop — base board is empty; symbols fall in from above and are
+  // CLIPPED to the board, so a tile stays invisible until it actually crosses
+  // into the board area (nothing floats above the board before it drops in).
+  const cellH = size + gap;
+  const viewportH = rows * size + (rows - 1) * gap;
   return (
-    <div className="flex flex-col justify-center" style={{ gap }}>
+    <div
+      className="flex flex-col justify-center"
+      style={{ gap, height: viewportH, overflow: 'hidden' }}
+    >
       {Array.from({ length: rows }).map((_, i) => {
-        const row = rows - 1 - i;
+        const row = rows - 1 - i; // i = visual position from the top
         return (
           <motion.div
             key={i}
-            initial={{ y: -(size + gap) * (rows - i + 1), opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
+            // start one cell above the board's top edge (hidden by overflow);
+            // lower slots therefore fall further, like a real avalanche.
+            initial={{ y: -(i + 1) * cellH }}
+            animate={{ y: 0 }}
             transition={{ delay: (ci * stopInterval * 0.4 + i * 55) / 1000, type: 'spring', stiffness: 420, damping: 22 }}
           >
             {tile(colArr[row])}
@@ -404,17 +414,29 @@ interface ReelStripProps {
 function ReelStrip({ target, size, gap, delayMs, durationMs, pool, tile }: ReelStripProps) {
   const cellH = size + gap;
   const rows = target.length;
-  // strip top→bottom: long blur-by filler, then the result (highest row first)
-  const filler = useMemo(
+  // long blur-by filler that scrolls past below the result
+  const tailFiller = useMemo(
     () => Array.from({ length: FILLER }, () => pool[Math.floor(Math.random() * pool.length)]),
     // fresh filler each mount (= each spin)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
-  // result on top, filler below; the strip starts shifted up (showing filler)
-  // and slides DOWN to land on the result — a real downward-spinning reel.
-  const tiles = useMemo(() => [...[...target].reverse(), ...filler], [filler, target]);
-  const start = -(FILLER * cellH); // begin with the filler region in the viewport
+  // a couple of filler kept ABOVE the result, so the downward bounce overshoot
+  // never opens a gap that would expose the board sitting behind the reel.
+  const headFiller = useMemo(
+    () => Array.from({ length: HEAD }, () => pool[Math.floor(Math.random() * pool.length)]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+  // strip top→bottom: head filler, the result (highest row first), tail filler.
+  // The strip starts shifted up (showing filler) and slides DOWN to land on the
+  // result — a real downward-spinning reel.
+  const tiles = useMemo(
+    () => [...headFiller, ...[...target].reverse(), ...tailFiller],
+    [headFiller, tailFiller, target],
+  );
+  const rest = -(HEAD * cellH); // result block sits exactly in the viewport
+  const start = rest - FILLER * cellH; // begin up high, showing the tail filler
   const viewportH = rows * size + (rows - 1) * gap;
 
   return (
@@ -423,7 +445,7 @@ function ReelStrip({ target, size, gap, delayMs, durationMs, pool, tile }: ReelS
         style={{ display: 'flex', flexDirection: 'column', gap }}
         initial={{ y: start }}
         animate={{
-          y: [start, 0, size * 0.12, 0],
+          y: [start, rest, rest + size * 0.12, rest],
           filter: ['blur(2px)', 'blur(2px)', 'blur(0.5px)', 'blur(0px)'],
         }}
         transition={{
