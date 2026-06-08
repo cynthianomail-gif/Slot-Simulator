@@ -38,7 +38,10 @@ export function SlotCanvas() {
   const size = Math.max(40, Math.min(78, Math.floor(460 / Math.max(1, cols))));
   const gap = 8;
 
-  const [phase, setPhase] = useState<'intro' | 'settled'>('settled');
+  // Which presentation id has finished its intro (reels landed). Derived from
+  // this, `showIntro` flips synchronously during render the instant a new
+  // presentation arrives — no one-frame stale board between spins.
+  const [settledId, setSettledId] = useState<number | null>(null);
   const [mode, setMode] = useState<AnimationType>('rolling');
   const [cells, setCells] = useState<string[][]>(() => displayGrid.columns.map((c) => [...c]));
   const [winHi, setWinHi] = useState<Set<string>>(new Set());
@@ -72,7 +75,6 @@ export function SlotCanvas() {
   // Idle: mirror the settled board when there is no active presentation.
   useEffect(() => {
     if (presentation) return;
-    setPhase('settled');
     setCells(displayGrid.columns.map((c) => [...c]));
     setWinHi(new Set());
     setRemoving(new Set());
@@ -90,7 +92,6 @@ export function SlotCanvas() {
     const rowsMax = Math.max(...target0.map((c) => c.length));
 
     setMode(p.mode);
-    setPhase('intro');
     setWinHi(new Set());
     setRemoving(new Set());
     setDropStep(0);
@@ -110,7 +111,7 @@ export function SlotCanvas() {
     // settle
     at(introMs, () => {
       setCells(target0.map((c) => [...c]));
-      setPhase('settled');
+      setSettledId(p.id);
     });
 
     // cascade / win-highlight replay (in the settled grid)
@@ -149,10 +150,14 @@ export function SlotCanvas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [presentation?.id]);
 
+  // Derived in render so the spin reels appear the same frame the presentation
+  // arrives (prevents a one-frame flash of the previous board).
+  const showIntro = presentation != null && presentation.id !== settledId;
+
   return (
     <div className="flex h-full w-full items-center justify-center p-4">
       <div className="rounded-xl border border-border bg-background/40 p-3">
-        {phase === 'intro' && presentation ? (
+        {showIntro && presentation ? (
           <div key={presentation.id} className="flex" style={{ gap }}>
             {presentation.steps[0].grid.columns.map((colArr, ci) => (
               <IntroColumn
@@ -326,17 +331,19 @@ function ReelStrip({ target, size, gap, delayMs, durationMs, pool, tile }: ReelS
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
-  const tiles = useMemo(() => [...filler, ...[...target].reverse()], [filler, target]);
-  const rest = -(FILLER * cellH); // offset so the result sits in the viewport
+  // result on top, filler below; the strip starts shifted up (showing filler)
+  // and slides DOWN to land on the result — a real downward-spinning reel.
+  const tiles = useMemo(() => [...[...target].reverse(), ...filler], [filler, target]);
+  const start = -(FILLER * cellH); // begin with the filler region in the viewport
   const viewportH = rows * size + (rows - 1) * gap;
 
   return (
     <div style={{ height: viewportH, width: size, overflow: 'hidden' }}>
       <motion.div
         style={{ display: 'flex', flexDirection: 'column', gap }}
-        initial={{ y: 0 }}
+        initial={{ y: start }}
         animate={{
-          y: [0, rest, rest + size * 0.12, rest],
+          y: [start, 0, size * 0.12, 0],
           filter: ['blur(2px)', 'blur(2px)', 'blur(0.5px)', 'blur(0px)'],
         }}
         transition={{
