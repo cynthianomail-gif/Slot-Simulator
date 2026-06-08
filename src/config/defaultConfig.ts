@@ -1,7 +1,7 @@
 import type { GameConfig, PaylineDef } from '@/types';
 import { buildDefaultStrips } from './strips';
 
-/* 10 fixed paylines for a 5x3 board (row index per column, 0 = bottom). */
+/* 10 fixed paylines for a 5x3 board (row index per column, 0 = top row). */
 const PAYLINES_5x3: PaylineDef[] = [
   { id: 1, rows: [1, 1, 1, 1, 1] },
   { id: 2, rows: [2, 2, 2, 2, 2] },
@@ -23,8 +23,8 @@ export const defaultConfig: GameConfig = {
   bet: { default: 100, steps: [10, 20, 50, 100, 200, 500, 1000] },
 
   math: {
-    mode: 'reelstrip',
-    targetRTP: 0.96,
+    mode: 'weight',
+    targetRTP: 0.985,
     targetBF: 150,
   },
 
@@ -41,8 +41,8 @@ export const defaultConfig: GameConfig = {
   },
 
   symbols: [
-    { id: 'WILD', name: '百搭 Wild', type: ['wild', 'expanding'], weight: 1, payout: [0, 0, 0] },
-    { id: 'SC', name: '分散 Scatter', type: ['scatter'], weight: 1, payout: [0, 0, 0] },
+    { id: 'WILD', name: '百搭 Wild', type: ['wild', 'expanding'], weight: 2.55, payout: [0, 0, 0] },
+    { id: 'SC', name: '分散 Scatter', type: ['scatter'], weight: 2, payout: [0, 0, 0] },
     { id: 'BO', name: 'Bonus 金幣', type: ['bonus', 'collector'], weight: 1, payout: [0, 0, 0] },
     { id: 'H1', name: '鑽石', type: ['normal'], weight: 4, payout: [8, 20, 80] },
     { id: 'H2', name: '紅寶石', type: ['normal'], weight: 5, payout: [6, 16, 64] },

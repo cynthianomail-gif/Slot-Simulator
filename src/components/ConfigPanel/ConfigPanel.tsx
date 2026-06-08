@@ -11,15 +11,11 @@ import { RotateCcw } from 'lucide-react';
 
 export function ConfigPanel() {
   const resetConfig = useGameStore((s) => s.resetConfig);
-  const name = useGameStore((s) => s.config.meta.name);
 
   return (
     <div className="flex h-full flex-col border-r border-border bg-card/40">
       <div className="flex items-center justify-between border-b border-border p-3">
-        <div>
-          <div className="text-sm font-semibold">遊戲設定 GameConfig</div>
-          <div className="text-[11px] text-muted-foreground">{name}</div>
-        </div>
+        <div className="text-sm font-semibold">遊戲設定 GameConfig</div>
         <Button size="sm" variant="ghost" onClick={resetConfig}>
           <RotateCcw className="h-3.5 w-3.5" /> 重置
         </Button>

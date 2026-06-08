@@ -9,7 +9,6 @@ import { DebugPanel } from '@/components/Debug/DebugPanel';
 
 export default function App() {
   const init = useGameStore((s) => s.init);
-  const meta = useGameStore((s) => s.config.meta);
 
   useEffect(() => {
     init();
@@ -23,13 +22,7 @@ export default function App() {
           <div className="flex h-7 w-7 items-center justify-center rounded bg-gradient-to-br from-primary to-accent font-black text-primary-foreground">
             S
           </div>
-          <div>
-            <div className="text-sm font-semibold leading-none">拉霸模擬器</div>
-            <div className="text-[10px] text-muted-foreground">{meta.name} · v{meta.version}</div>
-          </div>
-        </div>
-        <div className="text-[11px] text-muted-foreground">
-          設定驅動 · 外掛功能 · 可重現亂數 · 無畫面模擬
+          <div className="text-sm font-semibold leading-none">Slot Simulator</div>
         </div>
       </header>
 

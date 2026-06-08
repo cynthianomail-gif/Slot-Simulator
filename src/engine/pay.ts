@@ -63,10 +63,14 @@ function evalPaylines(config: GameConfig, grid: GridResult): WinLine[] {
 
   for (const line of lines) {
     // Collect symbol id at each column for this line (skip -1 columns).
+    // Payline rows are authored TOP-DOWN (0 = top row), but each grid column is
+    // stored bottom-up (index 0 = bottom), so convert before indexing.
     const path: { col: number; row: number; id: string }[] = [];
     for (let col = 0; col < grid.cols; col++) {
-      const row = line.rows[col];
-      if (row === undefined || row < 0) continue;
+      const userRow = line.rows[col];
+      if (userRow === undefined || userRow < 0) continue;
+      const height = grid.columns[col]?.length ?? 0;
+      const row = height - 1 - userRow;
       const id = grid.columns[col]?.[row];
       if (id === undefined) break;
       path.push({ col, row, id });

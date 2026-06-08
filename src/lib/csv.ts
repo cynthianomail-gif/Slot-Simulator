@@ -41,7 +41,7 @@ export function buildConfigCsv(
   rows.push(['派彩模式 Pay Mode', config.pay.mode]);
   rows.push(['最小連線 Min Match', config.pay.minMatch]);
   rows.push(['群集最小 Cluster Min', config.pay.clusterMin ?? '']);
-  rows.push(['軸數 Columns', config.grid.cols]);
+  rows.push(['輪數 Columns', config.grid.cols]);
   rows.push(['盤面 Grid Shape', config.grid.shape.join('-')]);
   rows.push(['預設押注 Default Bet', config.bet.default]);
   rows.push(['押注級距 Bet Steps', config.bet.steps.join(' ')]);

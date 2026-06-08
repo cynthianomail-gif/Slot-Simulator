@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Stat } from '@/components/ui/misc';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { fmt, fmtInt, pct } from '@/lib/utils';
 import { buildConfigCsv, downloadCsv } from '@/lib/csv';
 import { Download } from 'lucide-react';
@@ -27,6 +29,8 @@ export function StatsDashboard() {
   const simProgress = useGameStore((s) => s.simProgress);
   const simReport = useGameStore((s) => s.simReport);
   const config = useGameStore((s) => s.config);
+
+  const [simRounds, setSimRounds] = useState(50_000);
 
   const chartData = rtpHistory.map((d) => ({ x: d.round, rtp: d.rtp * 100 }));
 
@@ -107,6 +111,26 @@ export function StatsDashboard() {
             <Button size="sm" variant="secondary" disabled={simRunning} onClick={() => startSim(1_000_000)}>
               1M
             </Button>
+          </div>
+          <div className="space-y-1">
+            <div className="text-[11px] font-medium text-muted-foreground">自訂模擬局數</div>
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                min={1}
+                step={1000}
+                className="h-8 flex-1"
+                value={simRounds}
+                onChange={(e) => setSimRounds(Math.max(1, Math.floor(Number(e.target.value) || 0)))}
+              />
+              <Button
+                size="sm"
+                disabled={simRunning || simRounds < 1}
+                onClick={() => startSim(simRounds)}
+              >
+                執行
+              </Button>
+            </div>
           </div>
           {simRunning && (
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
