@@ -105,14 +105,12 @@ export function SlotCanvas() {
     setWinHi(new Set());
     setRemoving(new Set());
     setDropStep(0);
-    // Base layer under the spinning overlay. Reel modes drop the final board in
-    // immediately (it stays hidden behind the overlay) so the reveal can never
-    // flash a different board. Cascade and flip must read as EMPTY until their
-    // symbols physically drop / flip in.
-    const emptyBase = p.mode === 'cascading' || p.mode === 'flipping';
-    setCells(
-      emptyBase ? target0.map((c) => c.map(() => '')) : target0.map((c) => [...c]),
-    );
+    // Keep the board layer EMPTY for the whole intro, in every mode. The
+    // spinning / flipping / dropping overlay is the only thing that shows the
+    // result; the board only fills in at settle — the same frame the overlay is
+    // removed, so there is no flash. This guarantees the final board can never
+    // peek through behind the animation (e.g. a reel's bounce overshoot).
+    setCells(target0.map((c) => c.map(() => '')));
 
     const totalCells = target0.reduce((n, c) => n + c.length, 0);
 
