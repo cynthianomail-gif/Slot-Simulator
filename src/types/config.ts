@@ -77,6 +77,8 @@ export interface AnimationProfile {
   stopInterval: number;
   bounceDuration: number;
   bounceCurve: string;
+  /** Delay (ms) after a round settles before the next auto-spin starts. */
+  roundGap?: number;
 }
 
 /* ------------------------------ GameConfig ------------------------------- */
@@ -108,6 +110,24 @@ export interface GameConfig {
     paylines?: PaylineDef[];
     /** Cluster minimum override (falls back to minMatch). */
     clusterMin?: number;
+  };
+
+  /**
+   * 連爆 — cascade / chain mechanic. When enabled a winning spin removes symbols
+   * and refills, repeating until no win. Independent of the animation style
+   * (which only decides how the refill is presented).
+   */
+  cascade?: {
+    enabled: boolean;
+    /** Show the win of each cascade step as it happens. */
+    showStepWin: boolean;
+    /**
+     * Refill rule:
+     *  - 'fillDown'   : remove winning cells, collapse down, fill from the top.
+     *  - 'clearMatch' : also remove every cell sharing a winning symbol id.
+     *  - 'respin'     : refill the cleared cells in place (no gravity).
+     */
+    refill: 'fillDown' | 'clearMatch' | 'respin';
   };
 
   symbols: SymbolDefinition[];

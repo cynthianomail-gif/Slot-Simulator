@@ -60,7 +60,7 @@ describe('Cascade mechanic', () => {
   it('removes wins and refills until no win (gridSteps grows)', () => {
     // 3x1 board, one payline, weight mode, a single always-winning symbol.
     const cfg = clone(defaultConfig);
-    cfg.animation.type = 'cascading';
+    cfg.cascade = { enabled: true, showStepWin: true, refill: 'fillDown' };
     cfg.math.mode = 'weight';
     cfg.grid = { cols: 3, shape: [1, 1, 1] };
     cfg.pay = { mode: 'payline', minMatch: 3, paylines: [{ id: 1, rows: [0, 0, 0] }] };

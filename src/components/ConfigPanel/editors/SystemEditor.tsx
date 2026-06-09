@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select } from './GeneralEditor';
 import { NumField, Section, ItemCard, Mini, Field } from './fields';
+import { X } from 'lucide-react';
 import type { AnimationType, AnimationProfile } from '@/types';
 
 /** RNG + Animation system controls. */
@@ -13,19 +14,57 @@ export function SystemEditor() {
 
   return (
     <div className="space-y-4">
-      <Section title="亂數產生器" desc="固定種子可逐位元重現完全一致的旋轉序列">
+      <Section title="亂數產生器" desc="相同種子＋相同設定可重現完全一致的旋轉序列">
         <Switch
           checked={s.useFixedSeed}
           onCheckedChange={(v) => s.setSeedMode(v, s.seed)}
           label="固定種子模式"
         />
         {s.useFixedSeed && (
-          <div className="flex items-end gap-2">
-            <Mini label="種子" className="flex-1">
-              <Input type="number" defaultValue={s.seed} onBlur={(e) => s.setSeedMode(true, parseInt(e.target.value, 10))} />
-            </Mini>
-            <Button size="sm" variant="secondary" onClick={() => s.setSeedMode(true, s.seed)}>重新設種</Button>
-          </div>
+          <>
+            <div className="flex items-end gap-2">
+              <Mini label="種子" className="flex-1">
+                <Input
+                  key={s.seed}
+                  type="number"
+                  defaultValue={s.seed}
+                  onBlur={(e) => s.setSeedMode(true, parseInt(e.target.value, 10) || 0)}
+                />
+              </Mini>
+              <Button size="sm" variant="secondary" onClick={() => s.setSeedMode(true, s.seed)}>重新設種</Button>
+            </div>
+            <div className="flex items-end gap-2">
+              <Mini label="種子名稱" className="flex-1">
+                <Input value={s.seedName} placeholder="例：GameXXX_專案名稱" onChange={(e) => s.setSeedName(e.target.value)} />
+              </Mini>
+              <Button size="sm" onClick={s.saveSeed}>儲存</Button>
+            </div>
+            {s.savedSeeds.length > 0 && (
+              <div className="space-y-1">
+                <div className="text-[11px] font-medium text-muted-foreground">已存種子</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {s.savedSeeds.map((sv) => (
+                    <div key={sv.name} className="flex items-center gap-1 rounded-md border border-border bg-background/40 px-1.5 py-1">
+                      <button
+                        className="text-[11px] text-foreground hover:text-primary"
+                        title={`種子 ${sv.seed}`}
+                        onClick={() => s.loadSeed(sv.seed, sv.name)}
+                      >
+                        {sv.name}
+                      </button>
+                      <button
+                        className="text-muted-foreground hover:text-destructive"
+                        title="刪除"
+                        onClick={() => s.deleteSeed(sv.name)}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </Section>
 
@@ -35,7 +74,7 @@ export function SystemEditor() {
           <Select
             value={s.config.animation.type}
             options={['rolling', 'independent', 'cascading', 'flipping']}
-            labels={{ rolling: '滾動 (rolling)', independent: '單格 (single)', cascading: '消除 (cascading)', flipping: '翻轉 (flipping)' }}
+            labels={{ rolling: '滾動 (rolling)', independent: '單格 (single)', cascading: '掉落 (cascading)', flipping: '翻轉 (flipping)' }}
             onChange={(v) => update((c) => { c.animation.type = v as AnimationType; })}
           />
         </Field>
@@ -61,6 +100,7 @@ function ProfileEditor({ title, which }: { title: string; which: 'normal' | 'tur
         <NumField label="旋轉速度倍率" value={profile.spinSpeed} step={0.1} onChange={(v) => set('spinSpeed', v)} />
         <SecField label="每輪停止間隔" ms={profile.stopInterval} onChange={(v) => set('stopInterval', v)} />
         <SecField label="回彈時間" ms={profile.bounceDuration} onChange={(v) => set('bounceDuration', v)} />
+        <SecField label="局間間隔" ms={profile.roundGap ?? 500} onChange={(v) => set('roundGap', v)} />
       </div>
     </ItemCard>
   );

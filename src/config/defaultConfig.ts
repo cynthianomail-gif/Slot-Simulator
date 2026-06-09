@@ -40,6 +40,12 @@ export const defaultConfig: GameConfig = {
     clusterMin: 8,
   },
 
+  cascade: {
+    enabled: false,
+    showStepWin: true,
+    refill: 'fillDown',
+  },
+
   symbols: [
     { id: 'WILD', name: '百搭 Wild', type: ['wild', 'expanding'], weight: 2.55, payout: [0, 0, 0] },
     { id: 'SC', name: '分散 Scatter', type: ['scatter'], weight: 2, payout: [0, 0, 0] },
@@ -135,6 +141,7 @@ export const defaultConfig: GameConfig = {
       stopInterval: 120,
       bounceDuration: 140,
       bounceCurve: 'easeOut',
+      roundGap: 500,
     },
     turbo: {
       totalSpinTime: 200,
@@ -142,6 +149,7 @@ export const defaultConfig: GameConfig = {
       stopInterval: 40,
       bounceDuration: 60,
       bounceCurve: 'easeOut',
+      roundGap: 250,
     },
   },
 

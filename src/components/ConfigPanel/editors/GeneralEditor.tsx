@@ -2,6 +2,7 @@ import { useGameStore } from '@/store/gameStore';
 import { NumField, Field, Section, parseNums } from './fields';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/misc';
 import { regularShape } from '@/engine/grid';
 import { Plus, X } from 'lucide-react';
 import type { PayMode } from '@/types';
@@ -99,7 +100,49 @@ export function GeneralEditor() {
 
         {mode === 'payline' && <PaylineEditor />}
       </Section>
+
+      <CascadeSection />
     </div>
+  );
+}
+
+/* ------------------------------ cascade (連爆) ------------------------------ */
+
+function CascadeSection() {
+  const config = useGameStore((s) => s.config);
+  const update = useGameStore((s) => s.updateConfig);
+  const cas = config.cascade ?? { enabled: false, showStepWin: true, refill: 'fillDown' as const };
+
+  const set = (mut: (c: NonNullable<typeof config.cascade>) => void) =>
+    update((c) => {
+      c.cascade ??= { enabled: false, showStepWin: true, refill: 'fillDown' };
+      mut(c.cascade);
+    });
+
+  return (
+    <Section title="連爆" desc="得分後消除並補盤，連續得分直到無法得分才結束此局">
+      <Switch
+        checked={cas.enabled}
+        onCheckedChange={(v) => set((x) => { x.enabled = v; })}
+        label="啟用連爆"
+      />
+      {cas.enabled && (
+        <>
+          <Field label="補盤方式" hint="補盤一律依「節奏」分頁的動畫類型演繹">
+            <Select
+              value={cas.refill}
+              options={['fillDown', 'clearMatch', 'respin']}
+              labels={{
+                fillDown: '消除遞補（消除得分圖示，由上往下補滿）',
+                clearMatch: '同款全消（連同相同圖示一起消，由上往下補）',
+                respin: '原地重轉（原位重新滾動補盤，不往下掉）',
+              }}
+              onChange={(v) => set((x) => { x.refill = v as 'fillDown' | 'clearMatch' | 'respin'; })}
+            />
+          </Field>
+        </>
+      )}
+    </Section>
   );
 }
 

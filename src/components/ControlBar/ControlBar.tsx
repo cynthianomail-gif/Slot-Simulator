@@ -117,9 +117,10 @@ export function ControlBar() {
         </Button>
       </div>
 
-      {s.cheats.armed.length > 0 && (
+      {(s.cheats.armedTriggers.length > 0 || s.cheats.forceMaxWin) && (
         <Badge variant="accent" className="absolute -top-5 right-4">
-          已裝填作弊：{s.cheats.armed.join(', ')}
+          已裝填強開{s.cheats.armedTriggers.length > 0 ? `：${s.cheats.armedTriggers.join(', ')}` : ''}
+          {s.cheats.forceMaxWin ? ' · 最大贏分' : ''}
         </Badge>
       )}
     </div>

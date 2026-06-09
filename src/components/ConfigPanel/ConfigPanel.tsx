@@ -27,9 +27,9 @@ export function ConfigPanel() {
             <TabsTrigger value="general">一般</TabsTrigger>
             <TabsTrigger value="symbols">圖示</TabsTrigger>
             <TabsTrigger value="reels">假盤</TabsTrigger>
-            <TabsTrigger value="features">觸發/功能</TabsTrigger>
-            <TabsTrigger value="cheats">作弊/購買</TabsTrigger>
-            <TabsTrigger value="system">亂數/動畫</TabsTrigger>
+            <TabsTrigger value="features">機制</TabsTrigger>
+            <TabsTrigger value="cheats">強開</TabsTrigger>
+            <TabsTrigger value="system">節奏</TabsTrigger>
           </TabsList>
         </div>
 

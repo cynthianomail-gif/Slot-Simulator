@@ -27,6 +27,9 @@ export interface SymbolDefinition {
   /** Base weight used by weight-based math mode. */
   weight: number;
 
+  /** Optional separate weight used during free-game spins (falls back to weight). */
+  fgWeight?: number;
+
   /** Optional separate weight for stacked appearance. */
   stackWeight?: number;
 

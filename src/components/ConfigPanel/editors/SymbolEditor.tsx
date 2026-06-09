@@ -63,10 +63,13 @@ export function SymbolEditor() {
               <Mini label="權重">
                 <Input className="h-8" type="number" defaultValue={sym.weight} onBlur={(e) => update((c) => { c.symbols[i].weight = parseFloat(e.target.value); })} />
               </Mini>
-              <Mini label="堆疊權重">
+              <Mini label="免費遊戲權重">
+                <Input className="h-8" type="number" placeholder="同一般" defaultValue={sym.fgWeight ?? ''} onBlur={(e) => update((c) => { c.symbols[i].fgWeight = e.target.value ? parseFloat(e.target.value) : undefined; })} />
+              </Mini>
+              <Mini label="堆疊權重" className="col-span-2">
                 <Input className="h-8" type="number" defaultValue={sym.stackWeight ?? ''} onBlur={(e) => update((c) => { c.symbols[i].stackWeight = e.target.value ? parseFloat(e.target.value) : undefined; })} />
               </Mini>
-              <Mini label="賠付（3,4,5… 連線）" className="col-span-2">
+              <Mini label="賠付（3連, 4連, 5連…）" className="col-span-2">
                 <Input className="h-8" defaultValue={sym.payout.join(', ')} onBlur={(e) => update((c) => { c.symbols[i].payout = parseNums(e.target.value); })} />
               </Mini>
               <Mini label="類型（逗號分隔）" className="col-span-2">
@@ -75,7 +78,7 @@ export function SymbolEditor() {
               <Mini label="圖片網址" className="col-span-2">
                 <Input className="h-8" defaultValue={sym.image ?? ''} onBlur={(e) => update((c) => { c.symbols[i].image = e.target.value || undefined; })} />
               </Mini>
-              <Mini label="屬性（逗號分隔）" className="col-span-2">
+              <Mini label="屬性標籤（功能外掛用，逗號分隔）" className="col-span-2">
                 <Input className="h-8" defaultValue={(sym.properties ?? []).join(', ')} onBlur={(e) => update((c) => { c.symbols[i].properties = parseList(e.target.value); })} />
               </Mini>
               <div className="col-span-2 pt-0.5">

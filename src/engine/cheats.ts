@@ -1,73 +1,45 @@
 import type { GameConfig } from '@/types';
 import type { PlayOptions } from './gameEngine';
 
-/** Developer cheat surface. Each cheat maps to a PlayOptions mutation. */
-export type CheatKind =
-  | 'FORCE_FG'
-  | 'FORCE_BG'
-  | 'FORCE_BONUS'
-  | 'FORCE_RESPIN'
-  | 'FORCE_SCATTER'
-  | 'FORCE_MAX_WIN';
-
+/**
+ * Force-open ("強開") surface. The user arms one or more of their own triggers
+ * (defined in the 機制 tab); the next spin then both forces those triggers to
+ * fire AND seeds the base grid with the symbols their condition needs, so the
+ * board visibly spins out the triggering result.
+ */
 export interface CheatState {
-  /** Cheats armed for the *next* round, consumed once. */
-  armed: CheatKind[];
+  /** Trigger ids armed for the next round (consumed once). */
+  armedTriggers: string[];
+  /** Force the round to pay an exact max-win multiple of bet. */
+  forceMaxWin: boolean;
   maxWinX: number;
 }
 
-/**
- * Resolve armed cheats into PlayOptions. Force-* cheats resolve to feature /
- * trigger ids by matching the config's triggers/features by intent.
- */
 export function applyCheats(
   config: GameConfig,
   base: PlayOptions,
   cheats: CheatState,
 ): PlayOptions {
-  if (cheats.armed.length === 0) return base;
-  const forced = new Set(base.forcedTriggers ?? []);
-  let forceMaxWinX = base.forceMaxWinX;
+  if (cheats.armedTriggers.length === 0 && !cheats.forceMaxWin) return base;
 
-  for (const c of cheats.armed) {
-    switch (c) {
-      case 'FORCE_FG':
-        addFeatureOfType(config, ['freeGame'], forced);
-        break;
-      case 'FORCE_BG':
-      case 'FORCE_BONUS':
-        addFeatureOfType(config, ['holdAndSpin', 'bonus'], forced);
-        break;
-      case 'FORCE_RESPIN':
-        addFeatureOfType(config, ['respin'], forced);
-        break;
-      case 'FORCE_SCATTER':
-        // Force the first free-game trigger directly (board-independent).
-        addFirstTrigger(config, forced);
-        break;
-      case 'FORCE_MAX_WIN':
-        forceMaxWinX = cheats.maxWinX || 5000;
-        break;
+  const forced = new Set(base.forcedTriggers ?? []);
+  const forceSymbols: { id: string; count: number }[] = [...(base.forceSymbols ?? [])];
+
+  for (const tid of cheats.armedTriggers) {
+    forced.add(tid);
+    // pull the trigger's primary symbol condition so the board shows it
+    const trig = config.triggers.find((t) => t.id === tid);
+    const cond = trig?.rule.conditions?.find((c) => c.symbolId);
+    if (cond?.symbolId && ['>=', '>', '='].includes(cond.comparator)) {
+      const count = cond.comparator === '>' ? cond.value + 1 : cond.value;
+      forceSymbols.push({ id: cond.symbolId, count: Math.max(1, Math.floor(count)) });
     }
   }
 
   return {
     ...base,
     forcedTriggers: [...forced],
-    forceMaxWinX,
+    forceSymbols: forceSymbols.length ? forceSymbols : base.forceSymbols,
+    forceMaxWinX: cheats.forceMaxWin ? cheats.maxWinX || 5000 : base.forceMaxWinX,
   };
-}
-
-function addFeatureOfType(
-  config: GameConfig,
-  types: string[],
-  out: Set<string>,
-): void {
-  const entry = config.features.find((f) => f.enabled && types.includes(f.type));
-  if (entry) out.add(entry.id);
-}
-
-function addFirstTrigger(config: GameConfig, out: Set<string>): void {
-  const t = config.triggers[0];
-  if (t) out.add(t.id);
 }

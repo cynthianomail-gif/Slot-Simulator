@@ -1,79 +1,68 @@
 import { useGameStore } from '@/store/gameStore';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/misc';
-import { Input } from '@/components/ui/input';
-import { Section, Mini } from './fields';
-import { fmt } from '@/lib/utils';
-import type { CheatKind } from '@/engine/cheats';
+import { Section } from './fields';
 
-const CHEATS: { kind: CheatKind; label: string }[] = [
-  { kind: 'FORCE_FG', label: '強制免費遊戲' },
-  { kind: 'FORCE_BG', label: '強制 Bonus 遊戲' },
-  { kind: 'FORCE_BONUS', label: '強制 Bonus' },
-  { kind: 'FORCE_RESPIN', label: '強制 Respin' },
-  { kind: 'FORCE_SCATTER', label: '強制 Scatter' },
-  { kind: 'FORCE_MAX_WIN', label: '強制最大贏分' },
-];
-
+/**
+ * 強開 — force-open. Lists the user's own triggers (defined in the 機制 tab);
+ * arming one forces the next spin to roll a board that satisfies that trigger,
+ * so the mechanic actually fires and plays out.
+ */
 export function CheatBuyPanel() {
-  const armed = useGameStore((s) => s.cheats.armed);
-  const maxWinX = useGameStore((s) => s.cheats.maxWinX);
-  const armCheat = useGameStore((s) => s.armCheat);
+  const triggers = useGameStore((s) => s.config.triggers);
+  const features = useGameStore((s) => s.config.features);
+  const armed = useGameStore((s) => s.cheats.armedTriggers);
+  const armTrigger = useGameStore((s) => s.armTrigger);
   const clearCheats = useGameStore((s) => s.clearCheats);
-  const buyOptions = useGameStore((s) => s.config.buyOptions);
-  const buy = useGameStore((s) => s.buy);
-  const bet = useGameStore((s) => s.bet);
-  const balance = useGameStore((s) => s.balance);
+
+  const condText = (tid: string) => {
+    const t = triggers.find((x) => x.id === tid);
+    const c = t?.rule.conditions?.[0];
+    return c?.symbolId ? `${c.symbolId} ${c.comparator} ${c.value}` : '';
+  };
 
   return (
     <div className="space-y-4">
       <Section
-        title="開發者作弊"
-        desc="裝填的作弊僅套用於下一盤"
-        action={armed.length > 0 ? (
-          <Button size="sm" variant="ghost" className="h-7 px-2" onClick={clearCheats}>清除</Button>
-        ) : undefined}
+        title="強開機制"
+        desc="裝填後下一旋轉強制轉出可觸發該機制的盤面"
+        action={
+          armed.length > 0 ? (
+            <Button size="sm" variant="ghost" className="h-7 px-2" onClick={clearCheats}>清除</Button>
+          ) : undefined
+        }
       >
-        <div className="grid grid-cols-2 gap-2">
-          {CHEATS.map((c) => (
-            <Button
-              key={c.kind}
-              size="sm"
-              variant={armed.includes(c.kind) ? 'accent' : 'outline'}
-              onClick={() => armCheat(c.kind)}
-            >
-              {c.label}
-            </Button>
-          ))}
-        </div>
-        <Mini label="最大贏分倍數（× 押注）">
-          <Input type="number" defaultValue={maxWinX} onBlur={(e) => armCheat('FORCE_MAX_WIN', parseFloat(e.target.value))} />
-        </Mini>
-        {armed.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {armed.map((a) => <Badge key={a} variant="accent">{a}</Badge>)}
+        {triggers.length === 0 && (
+          <div className="py-2 text-center text-[11px] text-muted-foreground">
+            尚無機制，請先到「機制」分頁新增觸發條件
           </div>
         )}
-      </Section>
-
-      <Section title="購買功能" desc="花費押注倍數直接進入功能">
-        {buyOptions.length === 0 && (
-          <div className="py-2 text-center text-[11px] text-muted-foreground">尚無購買選項</div>
-        )}
-        {buyOptions.map((o) => {
-          const cost = o.cost * bet;
-          return (
-            <div key={o.id} className="flex items-center justify-between rounded-md border border-border bg-background/40 p-2.5">
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-foreground">{o.name}</div>
-                <div className="text-[11px] text-muted-foreground">{o.cost}× 押注 = {fmt(cost, 0)}</div>
-              </div>
-              <Button size="sm" variant="secondary" disabled={balance < cost} onClick={() => buy(o.id)}>
-                購買
-              </Button>
-            </div>
-          );
-        })}
+        <div className="grid grid-cols-1 gap-2">
+          {triggers.map((t) => {
+            const feat = features.find((f) => f.id === t.target);
+            const on = armed.includes(t.id);
+            return (
+              <button
+                key={t.id}
+                onClick={() => armTrigger(t.id)}
+                className={`rounded-md border px-2.5 py-2 text-left transition-colors ${
+                  on
+                    ? 'border-accent/50 bg-accent/15'
+                    : 'border-border bg-background/40 hover:border-primary/40'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-foreground">{t.name}</span>
+                  {on && <Badge variant="accent">已裝填</Badge>}
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  {condText(t.id) && <span>{condText(t.id)} · </span>}
+                  → {feat?.type ?? t.target}
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </Section>
     </div>
   );

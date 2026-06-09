@@ -26,20 +26,23 @@ export interface ReelOutcome {
 export function reelSymbolWeights(
   config: GameConfig,
   col: number,
+  useFg = false,
 ): { ids: string[]; weights: number[] } {
   const reelNo = col + 1; // excludeReels is authored 1-indexed
+  const w = (s: GameConfig['symbols'][number]) =>
+    Math.max(0, useFg ? s.fgWeight ?? s.weight : s.weight);
   const ids: string[] = [];
   const weights: number[] = [];
   for (const s of config.symbols) {
     if (s.excludeReels?.includes(reelNo)) continue;
     ids.push(s.id);
-    weights.push(Math.max(0, s.weight));
+    weights.push(w(s));
   }
   // never leave a reel empty
   if (ids.length === 0) {
     for (const s of config.symbols) {
       ids.push(s.id);
-      weights.push(Math.max(0, s.weight));
+      weights.push(w(s));
     }
   }
   return { ids, weights };
@@ -63,7 +66,7 @@ export function spinVisualWeights(
   return base;
 }
 
-export function spinReels(config: GameConfig, rng: IRng): ReelOutcome {
+export function spinReels(config: GameConfig, rng: IRng, useFg = false): ReelOutcome {
   const shape = config.grid.shape;
   const cols = shape.length;
   const reelStops: number[] = new Array(cols).fill(0);
@@ -86,10 +89,10 @@ export function spinReels(config: GameConfig, rng: IRng): ReelOutcome {
       columns.push(column);
     }
   } else {
-    // weight-based independent draws, per-reel (honours excludeReels)
+    // weight-based independent draws, per-reel (honours excludeReels + FG)
     for (let col = 0; col < cols; col++) {
       const rows = shape[col];
-      const { ids, weights } = reelSymbolWeights(config, col);
+      const { ids, weights } = reelSymbolWeights(config, col, useFg);
       const column: string[] = [];
       for (let r = 0; r < rows; r++) {
         const idx = rng.weightedIndex(weights);

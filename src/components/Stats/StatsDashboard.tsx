@@ -18,6 +18,8 @@ import {
   CartesianGrid,
 } from 'recharts';
 
+const MAX_SIM = 10_000_000;
+
 export function StatsDashboard() {
   const stats = useGameStore((s) => s.stats);
   const rtpHistory = useGameStore((s) => s.rtpHistory);
@@ -28,11 +30,13 @@ export function StatsDashboard() {
   const simRunning = useGameStore((s) => s.simRunning);
   const simProgress = useGameStore((s) => s.simProgress);
   const simReport = useGameStore((s) => s.simReport);
+  const simRtpHistory = useGameStore((s) => s.simRtpHistory);
   const config = useGameStore((s) => s.config);
 
   const [simRounds, setSimRounds] = useState(50_000);
 
   const chartData = rtpHistory.map((d) => ({ x: d.round, rtp: d.rtp * 100 }));
+  const simChartData = simRtpHistory.map((d) => ({ x: d.round, rtp: d.rtp * 100 }));
 
   const exportCsv = () => {
     const csv = buildConfigCsv(config, stats, simReport);
@@ -113,20 +117,21 @@ export function StatsDashboard() {
             </Button>
           </div>
           <div className="space-y-1">
-            <div className="text-[11px] font-medium text-muted-foreground">自訂模擬局數</div>
+            <div className="text-[11px] font-medium text-muted-foreground">自訂模擬局數（上限 {fmtInt(MAX_SIM)}）</div>
             <div className="flex gap-2">
               <Input
                 type="number"
                 min={1}
+                max={MAX_SIM}
                 step={1000}
                 className="h-8 flex-1"
                 value={simRounds}
-                onChange={(e) => setSimRounds(Math.max(1, Math.floor(Number(e.target.value) || 0)))}
+                onChange={(e) => setSimRounds(Math.max(1, Math.min(MAX_SIM, Math.floor(Number(e.target.value) || 0))))}
               />
               <Button
                 size="sm"
                 disabled={simRunning || simRounds < 1}
-                onClick={() => startSim(simRounds)}
+                onClick={() => startSim(Math.min(MAX_SIM, simRounds))}
               >
                 執行
               </Button>
@@ -135,6 +140,24 @@ export function StatsDashboard() {
           {simRunning && (
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
               <div className="h-full bg-primary transition-all" style={{ width: `${simProgress * 100}%` }} />
+            </div>
+          )}
+          {(simRunning || simReport) && simRtpHistory.length > 1 && (
+            <div className="h-28 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={simChartData} margin={{ top: 4, right: 8, bottom: 0, left: -18 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="x" tick={{ fontSize: 9 }} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis tick={{ fontSize: 9 }} stroke="hsl(var(--muted-foreground))" domain={['auto', 'auto']} />
+                  <Tooltip
+                    contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', fontSize: 11 }}
+                    formatter={(v: number) => [`${v.toFixed(2)}%`, 'RTP']}
+                    labelFormatter={(l) => `${fmtInt(Number(l))} 局`}
+                  />
+                  <ReferenceLine y={targetRTP * 100} stroke="hsl(var(--accent))" strokeDasharray="4 4" />
+                  <Line type="monotone" dataKey="rtp" stroke="hsl(var(--primary))" dot={false} strokeWidth={2} isAnimationActive={false} />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
           )}
           {simReport && !simRunning && (

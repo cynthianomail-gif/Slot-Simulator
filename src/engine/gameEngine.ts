@@ -9,7 +9,7 @@ import type {
 } from '@/types';
 import type { IRng } from './rng';
 import { EventLog } from './eventLog';
-import { spinReels, gridFromStops } from './reel';
+import { spinReels, gridFromStops, reelSymbolWeights } from './reel';
 import { evaluate } from './pay';
 import { evalTriggers, type TriggerContext } from './trigger';
 import { createFeature } from '@/features/registry';
@@ -20,12 +20,41 @@ export interface PlayOptions {
   bet: number;
   /** Force these trigger ids to fire regardless of the board. */
   forcedTriggers?: string[];
+  /** Force the base spin's grid to contain at least `count` of a symbol id. */
+  forceSymbols?: { id: string; count: number }[];
   /** Force base-spin reel stops (reelstrip mode). */
   forcedStops?: number[];
   /** Cheat: scale the round win to an arbitrary max-win multiple of bet. */
   forceMaxWinX?: number;
   /** Safety cap on cascades per spin. */
   cascadeCap?: number;
+}
+
+/** Force at least `count` of each requested symbol onto the grid (cheat aid). */
+function injectSymbols(
+  grid: GridResult,
+  specs: { id: string; count: number }[],
+  rng: IRng,
+): void {
+  for (const spec of specs) {
+    const cells: [number, number][] = [];
+    for (let c = 0; c < grid.columns.length; c++) {
+      for (let r = 0; r < grid.columns[c].length; r++) cells.push([c, r]);
+    }
+    let have = cells.filter(([c, r]) => grid.columns[c][r] === spec.id).length;
+    // shuffle so the forced symbols land in varied spots
+    for (let i = cells.length - 1; i > 0; i--) {
+      const j = Math.floor(rng.next() * (i + 1));
+      [cells[i], cells[j]] = [cells[j], cells[i]];
+    }
+    for (const [c, r] of cells) {
+      if (have >= spec.count) break;
+      if (grid.columns[c][r] !== spec.id) {
+        grid.columns[c][r] = spec.id;
+        have++;
+      }
+    }
+  }
 }
 
 const SAFE_CASCADE_CAP = 50;
@@ -48,6 +77,7 @@ export class GameEngine {
 
   private bet = 0;
   private forcedStops: number[] | undefined;
+  private forceSymbols: { id: string; count: number }[] | undefined;
 
   constructor(config: GameConfig, rng: IRng, log: EventLog) {
     this.config = config;
@@ -65,6 +95,7 @@ export class GameEngine {
   playRound(opts: PlayOptions): RoundResult {
     this.bet = opts.bet;
     this.forcedStops = opts.forcedStops;
+    this.forceSymbols = opts.forceSymbols;
     this.log.roundId++;
     this.log.spinId = 0;
     this.log.cascadeId = 0;
@@ -79,6 +110,7 @@ export class GameEngine {
     const base = this.runSpin('normal');
     spins.push(base);
     this.forcedStops = undefined; // forced stops only apply to the base spin
+    this.forceSymbols = undefined; // forced symbols only apply to the base spin
 
     // --- trigger evaluation on the base spin's final grid ---
     const finalGrid = lastGrid(base);
@@ -167,21 +199,25 @@ export class GameEngine {
 
     this.setState('SPINNING');
 
+    const useFg = kind === 'freegame' || kind === 'free';
     const outcome =
       this.forcedStops && kind === 'normal'
         ? gridFromStops(this.config, this.forcedStops)
-        : spinReels(this.config, this.rng);
+        : spinReels(this.config, this.rng, useFg);
 
     this.lastReelStops = outcome.reelStops;
     this.setState('SPIN_STOP');
     this.log.emit('REEL_STOP', { kind, stops: outcome.reelStops });
 
     let grid = outcome.grid;
+    if (kind === 'normal' && this.forceSymbols?.length) {
+      injectSymbols(grid, this.forceSymbols, this.rng);
+    }
     const cascades: EvalResult[] = [];
     const gridSteps: GridResult[] = [];
     let spinWinUnits = 0;
     const cap = SAFE_CASCADE_CAP;
-    const cascading = this.config.animation.type === 'cascading';
+    const cascading = this.config.cascade?.enabled ?? false;
 
     for (let step = 0; step <= cap; step++) {
       this.setState('EVALUATE');
@@ -204,7 +240,7 @@ export class GameEngine {
         this.log.cascadeId++;
         this.setState('CASCADE_RUNNING');
         this.log.emit('CASCADE', { kind, step: this.log.cascadeId });
-        grid = this.cascadeRefill(grid, res);
+        grid = this.cascadeRefill(grid, res, useFg);
       } else {
         break;
       }
@@ -226,26 +262,47 @@ export class GameEngine {
 
   /* ------------------------------ Cascade ------------------------------- */
 
-  /** Remove winning cells, collapse columns downward, refill from the top. */
-  private cascadeRefill(grid: GridResult, res: EvalResult): GridResult {
+  /**
+   * Refill the grid after a win, per config.cascade.refill:
+   *  - fillDown   : remove winning cells, collapse down, fill from the top.
+   *  - clearMatch : also remove every cell sharing a winning symbol id.
+   *  - respin     : refill the cleared cells in place (no gravity).
+   */
+  private cascadeRefill(grid: GridResult, res: EvalResult, useFg: boolean): GridResult {
+    const method = this.config.cascade?.refill ?? 'fillDown';
     const remove = new Set<string>();
     for (const w of res.wins) {
       for (const c of w.cells) remove.add(`${c.col}:${c.row}`);
     }
+    if (method === 'clearMatch') {
+      const winIds = new Set(res.wins.map((w) => w.symbolId));
+      for (let col = 0; col < grid.columns.length; col++) {
+        for (let row = 0; row < grid.columns[col].length; row++) {
+          if (winIds.has(grid.columns[col][row])) remove.add(`${col}:${row}`);
+        }
+      }
+    }
 
-    const symbols = this.config.symbols;
-    const weights = symbols.map((s) => Math.max(0, s.weight));
-    const ids = symbols.map((s) => s.id);
+    const pick = (col: number): string => {
+      const { ids, weights } = reelSymbolWeights(this.config, col, useFg);
+      return ids[this.rng.weightedIndex(weights)];
+    };
 
+    if (method === 'respin') {
+      // refill the cleared cells where they are; nothing collapses
+      const columns = grid.columns.map((column, col) =>
+        column.map((id, row) => (remove.has(`${col}:${row}`) ? pick(col) : id)),
+      );
+      return { cols: grid.cols, shape: [...grid.shape], columns };
+    }
+
+    // fillDown / clearMatch: survivors fall, fresh symbols fill the top
     const columns = grid.columns.map((column, col) => {
       const survivors: string[] = [];
       for (let row = 0; row < column.length; row++) {
         if (!remove.has(`${col}:${row}`)) survivors.push(column[row]);
       }
-      // refill the top with fresh weighted symbols
-      while (survivors.length < column.length) {
-        survivors.push(ids[this.rng.weightedIndex(weights)]);
-      }
+      while (survivors.length < column.length) survivors.push(pick(col));
       return survivors;
     });
 

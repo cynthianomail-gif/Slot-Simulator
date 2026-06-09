@@ -5,7 +5,7 @@ import { symbolStyle } from '@/lib/symbolStyle';
 import { symbolIndex } from '@/engine/wild';
 import { spinVisualWeights } from '@/engine/reel';
 import { cn, fmtInt } from '@/lib/utils';
-import type { AnimationType } from '@/types';
+import type { AnimationType, GridResult } from '@/types';
 
 /**
  * Slot Canvas — presentation player that emulates real slot reel behaviour.
@@ -27,12 +27,42 @@ import type { AnimationType } from '@/types';
 const FILLER = 16; // number of blur-by symbols on a spinning reel strip
 const HEAD = 2; // filler kept above the result so the bounce never exposes the board
 
+/** Cells that changed between two cascade boards (the ones to re-animate). */
+function diffKeys(a: GridResult, b: GridResult): Set<string> {
+  const s = new Set<string>();
+  for (let col = 0; col < b.columns.length; col++) {
+    for (let row = 0; row < b.columns[col].length; row++) {
+      if (a.columns[col]?.[row] !== b.columns[col][row]) s.add(`${col}:${row}`);
+    }
+  }
+  return s;
+}
+
+/* How a refilled cell enters, per animation type — so 連爆 補盤 matches the
+   chosen style (掉落 drops, 翻轉 flips, 滾動/單格 roll in). */
+function revealInitial(mode: AnimationType, cellH: number) {
+  switch (mode) {
+    case 'cascading':
+      return { y: -cellH * 2, opacity: 0 };
+    case 'flipping':
+      return { rotateX: 90, opacity: 0 };
+    default: // rolling / independent
+      return { y: -cellH, opacity: 0, filter: 'blur(3px)' };
+  }
+}
+function revealTransition(mode: AnimationType, i: number, turbo: boolean) {
+  if (mode === 'flipping') return { duration: turbo ? 0.22 : 0.34, ease: 'easeOut', delay: i * 0.02 };
+  if (mode === 'cascading') return { type: 'spring' as const, stiffness: 460, damping: 22, delay: i * 0.03 };
+  return { duration: turbo ? 0.2 : 0.32, ease: 'easeOut' as const }; // rolling / independent
+}
+
 export function SlotCanvas() {
   const config = useGameStore((s) => s.config);
   const presentation = useGameStore((s) => s.presentation);
   const displayGrid = useGameStore((s) => s.displayGrid);
   const speed = useGameStore((s) => s.speed);
   const collectPots = useGameStore((s) => s.collectPots);
+  const featureLabel = useGameStore((s) => s.featureLabel);
   const fcStages = useGameStore((s) => s.config.fakeCollect?.stages ?? 1);
   const bet = useGameStore((s) => s.bet);
 
@@ -68,6 +98,9 @@ export function SlotCanvas() {
   const [winHi, setWinHi] = useState<Set<string>>(new Set());
   const [removing, setRemoving] = useState<Set<string>>(new Set());
   const [dropStep, setDropStep] = useState(0);
+  const [revealCells, setRevealCells] = useState<Set<string>>(new Set());
+  const [stepWin, setStepWin] = useState<number | null>(null);
+  const turbo = speed === 'turbo';
 
   const timers = useRef<number[]>([]);
   const clearAll = () => {
@@ -109,6 +142,8 @@ export function SlotCanvas() {
     setWinHi(new Set());
     setRemoving(new Set());
     setDropStep(0);
+    setRevealCells(new Set());
+    setStepWin(null);
   }, [displayGrid, presentation]);
 
   // Timeline: intro reels → settle → cascade replay → finish.
@@ -125,6 +160,8 @@ export function SlotCanvas() {
     setWinHi(new Set());
     setRemoving(new Set());
     setDropStep(0);
+    setRevealCells(new Set());
+    setStepWin(null);
     // Keep the board layer EMPTY for the whole intro, in every mode. The
     // spinning / flipping / dropping overlay is the only thing that shows the
     // result; the board only fills in at settle — the same frame the overlay is
@@ -164,21 +201,28 @@ export function SlotCanvas() {
         return;
       }
       const winSet = new Set(s.winCells);
-      at(t, () => setWinHi(winSet));
+      at(t, () => {
+        setWinHi(winSet);
+        if (p.showStepWin && s.winAmount > 0) setStepWin(s.winAmount);
+      });
       t += stepHi;
-      if (p.mode === 'cascading' && p.steps[i + 1]) {
+      if (p.cascade && p.steps[i + 1]) {
         at(t, () => setRemoving(winSet));
         t += stepClear;
         at(t, () => {
+          const changed = diffKeys(p.steps[i].grid, p.steps[i + 1].grid);
           setCells(p.steps[i + 1].grid.columns.map((c) => [...c]));
           setRemoving(new Set());
           setWinHi(new Set());
+          setStepWin(null);
+          setRevealCells(changed);
           setDropStep((d) => d + 1);
         });
         t += stepDrop;
         schedule(i + 1);
       } else {
         t += stepDrop;
+        at(t, () => setStepWin(null));
         at(t, finish);
       }
     };
@@ -194,33 +238,50 @@ export function SlotCanvas() {
 
   return (
     <div className="relative flex h-full w-full items-center justify-center p-4">
+      {featureLabel && (
+        <div className="absolute left-1/2 top-2 z-30 -translate-x-1/2 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 px-4 py-1 text-sm font-black text-amber-950 shadow-lg ring-2 ring-amber-200">
+          {featureLabel}
+        </div>
+      )}
+      {stepWin != null && stepWin > 0 && (
+        <motion.div
+          key={stepWin}
+          initial={{ scale: 0.6, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 420, damping: 16 }}
+          className="absolute left-1/2 top-9 z-30 -translate-x-1/2 rounded-full bg-emerald-500 px-3 py-0.5 text-sm font-black text-emerald-950 shadow"
+        >
+          +{fmtInt(stepWin)}
+        </motion.div>
+      )}
       <div className="relative rounded-xl border border-border bg-background/40 p-3">
         {/* Settled board — always rendered as the base layer. The spinning
             overlay below covers it until the reels land, so revealing it can
             never flash a different board. */}
         <div className="flex" style={{ gap }}>
           {cells.map((column, col) => (
-            <div key={col} className="flex flex-col justify-center" style={{ gap }}>
+            <div key={col} className="flex flex-col justify-center" style={{ gap, perspective: 800 }}>
               {Array.from({ length: column.length }).map((_, i) => {
                 const row = column.length - 1 - i; // top first
                 const key = `${col}:${row}`;
                 const id = column[row];
                 const isWin = winHi.has(key);
                 const isRem = removing.has(key);
+                const isReveal = revealCells.has(key);
                 return (
                   <motion.div
-                    key={`${key}:${dropStep}`}
-                    initial={dropStep > 0 ? { y: -(size + gap) * 1.3, opacity: 0 } : false}
+                    key={`${key}:${isReveal ? dropStep : 'b'}`}
+                    initial={isReveal ? revealInitial(mode, size + gap) : false}
                     animate={
                       isRem
                         ? { scale: 0, opacity: 0, rotate: 10 }
-                        : { y: 0, opacity: 1, scale: isWin ? 1.12 : 1 }
+                        : { y: 0, rotateX: 0, opacity: 1, filter: 'blur(0px)', scale: isWin ? 1.12 : 1 }
                     }
                     transition={
                       isRem
                         ? { duration: 0.18 }
-                        : dropStep > 0
-                          ? { type: 'spring', stiffness: 460, damping: 22, delay: i * 0.03 }
+                        : isReveal
+                          ? revealTransition(mode, i, turbo)
                           : { type: 'spring', stiffness: 340, damping: 24 }
                     }
                     className={cn('relative', isWin && 'z-10')}
