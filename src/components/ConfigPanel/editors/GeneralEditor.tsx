@@ -239,9 +239,9 @@ function CascadeSection() {
               value={cas.refill}
               options={['fillDown', 'clearMatch', 'respin']}
               labels={{
-                fillDown: '消除遞補（消除得分圖示，由上往下補滿）',
-                clearMatch: '同款全消（連同相同圖示一起消，由上往下補）',
-                respin: '原地重轉（原位重新滾動補盤，不往下掉）',
+                fillDown: '消除遞補',
+                clearMatch: '同款全消',
+                respin: '原地補盤',
               }}
               onChange={(v) => set((x) => { x.refill = v as 'fillDown' | 'clearMatch' | 'respin'; })}
             />
