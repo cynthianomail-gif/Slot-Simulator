@@ -4,6 +4,16 @@ import type { GridShape } from './grid';
 /** Math model used to generate reel outcomes. */
 export type MathMode = 'weight' | 'reelstrip';
 
+/** Per-mode math target (hit rate + average win multiplier). */
+export interface MathTarget {
+  /** Mode label: 'NG' (normal game), 'FG' (free game), 'BG' (bonus), or custom. */
+  mode: string;
+  /** Target hit rate (winning spins / total spins), 0‥1. */
+  hitRate: number;
+  /** Target average win expressed as a multiple of bet (winning spins only). */
+  avgWinX: number;
+}
+
 /** Pay evaluation model. */
 export type PayMode = 'payline' | 'ways' | 'cluster';
 
@@ -96,6 +106,8 @@ export interface GameConfig {
     targetRTP: number;
     /** Target bonus frequency expressed as "1 in N". */
     targetBF: number;
+    /** Per-mode targets: hit rate & average win multiplier. */
+    targets: MathTarget[];
   };
 
   grid: {

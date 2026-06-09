@@ -2,14 +2,19 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useGameStore } from '@/store/gameStore';
 import { fmt } from '@/lib/utils';
 
-/** Large floating win animation shown over the canvas when a round wins. */
+/**
+ * Settlement panel — only shown at the end of a feature round (e.g. after all
+ * FG spins finish). Normal / cascade rounds use the in-board stepWin instead.
+ */
 export function FloatingWin() {
   const roundWin = useGameStore((s) => s.roundWin);
   const spinning = useGameStore((s) => s.spinning);
   const bet = useGameStore((s) => s.bet);
   const animationEnabled = useGameStore((s) => s.animationEnabled);
+  const lastRound = useGameStore((s) => s.lastRound);
 
-  const show = !spinning && roundWin > 0;
+  const hadFeature = (lastRound?.triggeredFeatures?.length ?? 0) > 0;
+  const show = !spinning && roundWin > 0 && hadFeature;
   const x = bet > 0 ? roundWin / bet : 0;
   const tier = x >= 50 ? 'MEGA WIN' : x >= 20 ? 'BIG WIN' : x >= 5 ? 'NICE WIN' : 'WIN';
 

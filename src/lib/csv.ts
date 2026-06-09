@@ -38,6 +38,10 @@ export function buildConfigCsv(
   rows.push(['數學模式 Math Mode', config.math.mode]);
   rows.push(['目標 RTP Target RTP', config.math.targetRTP]);
   rows.push(['目標 BF Target BF (1 in N)', config.math.targetBF]);
+  for (const t of config.math.targets ?? []) {
+    rows.push([`${t.mode} 目標得分率 Target Hit Rate`, t.hitRate]);
+    rows.push([`${t.mode} 目標均倍 Target Avg WinX`, t.avgWinX]);
+  }
   rows.push(['派彩模式 Pay Mode', config.pay.mode]);
   rows.push(['最小連線 Min Match', config.pay.minMatch]);
   rows.push(['群集最小 Cluster Min', config.pay.clusterMin ?? '']);
@@ -52,10 +56,21 @@ export function buildConfigCsv(
   section('圖示 SYMBOLS');
   const maxPay = Math.max(0, ...config.symbols.map((s) => s.payout.length));
   const payCols = Array.from({ length: maxPay }, (_, i) => `賠付x${config.pay.minMatch + i} (${config.pay.minMatch + i}OAK)`);
-  rows.push(['ID', '名稱 Name', '類型 Type', '權重 Weight', '堆疊權重 StackWeight', ...payCols, '屬性 Properties']);
+  // collect all mode keys across all symbols
+  const allModes = new Set<string>();
+  for (const s of config.symbols) {
+    if (s.modeWeights) for (const m of Object.keys(s.modeWeights)) allModes.add(m);
+  }
+  const modeList = [...allModes].sort();
+  const modeHeaders = modeList.flatMap((m) => [`${m} 權重 ${m} Weight`, `${m} 堆疊權重 ${m} StackWeight`]);
+  rows.push(['ID', '名稱 Name', '類型 Type', 'NG 權重 Weight', 'NG 堆疊權重 StackWeight', ...modeHeaders, ...payCols, '屬性 Properties']);
   for (const s of config.symbols) {
     const pays = Array.from({ length: maxPay }, (_, i) => s.payout[i] ?? '');
-    rows.push([s.id, s.name, s.type.join('|'), s.weight, s.stackWeight ?? '', ...pays, (s.properties ?? []).join('|')]);
+    const modeCols = modeList.flatMap((m) => {
+      const e = s.modeWeights?.[m];
+      return [e?.weight ?? '', e?.stackWeight ?? ''];
+    });
+    rows.push([s.id, s.name, s.type.join('|'), s.weight, s.stackWeight ?? '', ...modeCols, ...pays, (s.properties ?? []).join('|')]);
   }
 
   // --- wild ---
@@ -115,7 +130,7 @@ export function buildConfigCsv(
   rows.push(['欄位 Field', '值 Value']);
   rows.push(['實際 RTP Actual RTP', `${(stats.actualRTP * 100).toFixed(4)}%`]);
   rows.push(['實際 BF Actual BF', stats.actualBF > 0 ? `1/${stats.actualBF.toFixed(2)}` : '']);
-  rows.push(['中獎率 Hit Rate', `${(stats.hitRate * 100).toFixed(4)}%`]);
+  rows.push(['得分率 Hit Rate', `${(stats.hitRate * 100).toFixed(4)}%`]);
   rows.push(['最大贏分 Max Win', stats.maxWin]);
   rows.push(['平均贏分 Average Win', stats.averageWin.toFixed(2)]);
   rows.push(['平均 Bonus 間隔 Avg Bonus Interval', stats.averageBonusInterval.toFixed(2)]);
@@ -124,6 +139,12 @@ export function buildConfigCsv(
   rows.push(['總盤數 Total Spins', stats.totalSpins]);
   rows.push(['總投注 Total Wager', stats.totalWager]);
   rows.push(['總贏分 Total Win', stats.totalWin]);
+  // per-mode breakdown
+  for (const [mode, m] of Object.entries(stats.modeStats)) {
+    rows.push([`${mode} 得分率 Hit Rate`, `${(m.hitRate * 100).toFixed(4)}%`]);
+    rows.push([`${mode} 平均得分倍 Avg WinX`, m.avgWinX.toFixed(4)]);
+    rows.push([`${mode} 盤數 Spins`, m.spins]);
+  }
 
   // --- simulation report ---
   if (sim) {
@@ -134,7 +155,7 @@ export function buildConfigCsv(
     rows.push(['種子 Seed', sim.seed ?? 'random']);
     rows.push(['實際 RTP Actual RTP', `${(sim.actualRTP * 100).toFixed(4)}%`]);
     rows.push(['實際 BF Actual BF', sim.actualBF > 0 ? `1/${sim.actualBF.toFixed(2)}` : '']);
-    rows.push(['中獎率 Hit Rate', `${(sim.hitRate * 100).toFixed(4)}%`]);
+    rows.push(['得分率 Hit Rate', `${(sim.hitRate * 100).toFixed(4)}%`]);
     rows.push(['最大贏分 Max Win', sim.maxWin]);
     rows.push(['最大贏分倍數 Max Win x', (sim.maxWin / sim.bet).toFixed(1)]);
     rows.push(['平均贏分 Average Win', sim.averageWin.toFixed(2)]);

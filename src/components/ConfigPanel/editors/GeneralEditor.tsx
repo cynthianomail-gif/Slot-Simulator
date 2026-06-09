@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/misc';
 import { regularShape } from '@/engine/grid';
 import { Plus, X } from 'lucide-react';
-import type { PayMode } from '@/types';
+import type { PayMode, MathTarget } from '@/types';
 
 export function GeneralEditor() {
   const config = useGameStore((s) => s.config);
@@ -30,6 +30,7 @@ export function GeneralEditor() {
             onChange={(v) => update((c) => { c.math.targetBF = v; })}
           />
         </div>
+        <MathTargetsEditor />
       </Section>
 
       <Section title="盤面" desc="輪數（直行）與每輪列數">
@@ -102,6 +103,111 @@ export function GeneralEditor() {
       </Section>
 
       <CascadeSection />
+    </div>
+  );
+}
+
+/* ----------------------------- math targets -------------------------------- */
+
+const MODE_PRESETS = ['NG', 'FG', 'BG'] as const;
+const MODE_LABELS: Record<string, string> = { NG: '一般遊戲', FG: '免費遊戲', BG: 'Bonus' };
+
+function MathTargetsEditor() {
+  const config = useGameStore((s) => s.config);
+  const update = useGameStore((s) => s.updateConfig);
+  const targets = config.math.targets ?? [];
+  const usedModes = new Set(targets.map((t) => t.mode));
+
+  const addTarget = (mode: string) =>
+    update((c) => {
+      c.math.targets = [...(c.math.targets ?? []), { mode, hitRate: 0.25, avgWinX: 1.5 }];
+    });
+
+  const removeTarget = (i: number) =>
+    update((c) => { c.math.targets.splice(i, 1); });
+
+  const setField = (i: number, key: keyof MathTarget, v: number | string) =>
+    update((c) => {
+      const t = c.math.targets[i];
+      if (key === 'mode') t.mode = v as string;
+      else if (key === 'hitRate') t.hitRate = v as number;
+      else if (key === 'avgWinX') t.avgWinX = v as number;
+    });
+
+  // Preset modes not yet added
+  const remaining = MODE_PRESETS.filter((m) => !usedModes.has(m));
+
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
+      <div className="text-[13px] font-medium text-foreground">得分率 / 平均得分倍</div>
+
+      {targets.length === 0 && (
+        <div className="py-3 text-center text-[11px] text-muted-foreground">
+          尚無設定，點下方按鈕新增模式
+        </div>
+      )}
+
+      <div className="space-y-2.5">
+        {targets.map((t, i) => (
+          <div key={i} className="rounded-md border border-border bg-background/40 p-2.5">
+            <div className="mb-2 flex items-center justify-between">
+              {MODE_LABELS[t.mode] ? (
+                <span className="text-[13px] font-semibold text-foreground">
+                  {t.mode} <span className="font-normal text-muted-foreground">({MODE_LABELS[t.mode]})</span>
+                </span>
+              ) : (
+                <Input
+                  className="h-7 w-28 text-[13px] font-semibold"
+                  value={t.mode}
+                  placeholder="模式名稱"
+                  onChange={(e) => setField(i, 'mode', e.target.value)}
+                />
+              )}
+              <button
+                onClick={() => removeTarget(i)}
+                className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <div className="text-[11px] text-muted-foreground">得分率</div>
+                <Input
+                  type="number"
+                  step={0.01}
+                  value={t.hitRate}
+                  onChange={(e) => setField(i, 'hitRate', parseFloat(e.target.value) || 0)}
+                />
+              </div>
+              <div className="space-y-1">
+                <div className="text-[11px] text-muted-foreground">平均得分倍</div>
+                <Input
+                  type="number"
+                  step={0.1}
+                  value={t.avgWinX}
+                  onChange={(e) => setField(i, 'avgWinX', parseFloat(e.target.value) || 0)}
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        {remaining.map((m) => (
+          <Button key={m} size="sm" variant="secondary" className="h-7 px-2.5 text-[11px]" onClick={() => addTarget(m)}>
+            <Plus className="mr-1 h-3 w-3" /> {m}
+          </Button>
+        ))}
+        <Button size="sm" variant="outline" className="h-7 px-2.5 text-[11px]" onClick={() => addTarget('')}>
+          <Plus className="mr-1 h-3 w-3" /> 自訂模式
+        </Button>
+      </div>
+
+      <p className="text-[11px] leading-snug text-muted-foreground">
+        得分率 0~1，平均得分倍＝得分局的平均贏分 ÷ 注額。
+      </p>
     </div>
   );
 }

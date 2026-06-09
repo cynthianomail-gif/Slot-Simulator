@@ -46,6 +46,8 @@ export interface Presentation {
   /** Show each cascade step's win during the replay. */
   showStepWin: boolean;
   steps: PresentationStep[];
+  /** Total win for this entire spin (sum of all cascade steps). */
+  spinWinAmount: number;
 }
 
 interface GameStore {
@@ -100,6 +102,8 @@ interface GameStore {
   /* actions */
   init: () => void;
   spin: () => void;
+  /** Increment roundWin in real-time as each cascade/spin step's win appears. */
+  addStepWin: (amount: number) => void;
   advanceFakeCollect: (onComplete?: () => void) => void;
   stopSpin: () => void;
   finishPresentation: () => void;
@@ -206,6 +210,7 @@ function buildPresentation(
     cascade: config.cascade?.enabled ?? false,
     showStepWin: true, // 連爆 always shows each step's win
     steps,
+    spinWinAmount: spin.spinWin,
   };
 }
 
@@ -358,6 +363,8 @@ export const useGameStore = create<GameStore>((set, get) => {
       collectPots: reconcileCollect(config, null),
     });
   },
+
+  addStepWin: (amount) => set((s) => ({ roundWin: s.roundWin + amount })),
 
   /* ------------------------------ spin ------------------------------ */
   spin: () => {

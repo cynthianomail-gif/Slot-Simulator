@@ -60,15 +60,13 @@ export function SymbolEditor() {
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <Mini label="權重">
+              <Mini label="NG 權重">
                 <Input className="h-8" type="number" defaultValue={sym.weight} onBlur={(e) => update((c) => { c.symbols[i].weight = parseFloat(e.target.value); })} />
               </Mini>
-              <Mini label="免費遊戲權重">
-                <Input className="h-8" type="number" placeholder="同一般" defaultValue={sym.fgWeight ?? ''} onBlur={(e) => update((c) => { c.symbols[i].fgWeight = e.target.value ? parseFloat(e.target.value) : undefined; })} />
-              </Mini>
-              <Mini label="堆疊權重" className="col-span-2">
+              <Mini label="NG 堆疊權重">
                 <Input className="h-8" type="number" defaultValue={sym.stackWeight ?? ''} onBlur={(e) => update((c) => { c.symbols[i].stackWeight = e.target.value ? parseFloat(e.target.value) : undefined; })} />
               </Mini>
+              <ModeWeightsRow index={i} modeWeights={sym.modeWeights} />
               <Mini label="賠付（3連, 4連, 5連…）" className="col-span-2">
                 <Input className="h-8" defaultValue={sym.payout.join(', ')} onBlur={(e) => update((c) => { c.symbols[i].payout = parseNums(e.target.value); })} />
               </Mini>
@@ -111,5 +109,96 @@ export function SymbolEditor() {
         );
       })}
     </Section>
+  );
+}
+
+/* ----------------------------- mode weights -------------------------------- */
+
+const MW_PRESETS = ['FG', 'BG'] as const;
+
+interface ModeWeightEntry { weight: number; stackWeight?: number }
+
+function ModeWeightsRow({ index, modeWeights }: { index: number; modeWeights?: Record<string, ModeWeightEntry> }) {
+  const update = useGameStore((s) => s.updateConfig);
+  const entries = Object.entries(modeWeights ?? {}) as [string, ModeWeightEntry][];
+  const usedModes = new Set(entries.map(([k]) => k));
+  const remaining = MW_PRESETS.filter((m) => !usedModes.has(m));
+
+  const addMode = (mode: string) =>
+    update((c) => {
+      const s = c.symbols[index];
+      const entry: ModeWeightEntry = { weight: s.weight };
+      if (s.stackWeight != null) entry.stackWeight = s.stackWeight;
+      s.modeWeights = { ...(s.modeWeights ?? {}), [mode]: entry };
+    });
+
+  const removeMode = (mode: string) =>
+    update((c) => {
+      const mw = { ...(c.symbols[index].modeWeights ?? {}) };
+      delete mw[mode];
+      c.symbols[index].modeWeights = Object.keys(mw).length ? mw : undefined;
+    });
+
+  const setModeWeight = (mode: string, v: number) =>
+    update((c) => {
+      const mw = c.symbols[index].modeWeights ?? {};
+      mw[mode] = { ...mw[mode], weight: v };
+      c.symbols[index].modeWeights = { ...mw };
+    });
+
+  const setModeStackWeight = (mode: string, v: number | undefined) =>
+    update((c) => {
+      const mw = c.symbols[index].modeWeights ?? {};
+      const entry = { ...mw[mode] };
+      if (v == null) delete entry.stackWeight;
+      else entry.stackWeight = v;
+      mw[mode] = entry;
+      c.symbols[index].modeWeights = { ...mw };
+    });
+
+  return (
+    <>
+      {entries.map(([mode, e]) => (
+        <div key={mode} className="col-span-2 grid grid-cols-2 gap-2">
+          <Mini label={`${mode} 權重`}>
+            <div className="flex gap-1">
+              <Input
+                className="h-8 flex-1"
+                type="number"
+                defaultValue={e.weight}
+                onBlur={(ev) => setModeWeight(mode, parseFloat(ev.target.value) || 0)}
+              />
+              <button
+                onClick={() => removeMode(mode)}
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          </Mini>
+          <Mini label={`${mode} 堆疊權重`}>
+            <Input
+              className="h-8"
+              type="number"
+              defaultValue={e.stackWeight ?? ''}
+              onBlur={(ev) => setModeStackWeight(mode, ev.target.value ? parseFloat(ev.target.value) : undefined)}
+            />
+          </Mini>
+        </div>
+      ))}
+      <div className="col-span-2 flex flex-wrap gap-1">
+        {remaining.map((m) => (
+          <Button key={m} size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-muted-foreground" onClick={() => addMode(m)}>
+            <Plus className="mr-0.5 h-2.5 w-2.5" /> {m} 權重
+          </Button>
+        ))}
+        <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-muted-foreground" onClick={() => {
+          const name = prompt('模式名稱（例: FG2）');
+          if (name?.trim()) addMode(name.trim());
+        }}>
+          <Plus className="mr-0.5 h-2.5 w-2.5" /> 自訂
+        </Button>
+      </div>
+    </>
   );
 }

@@ -25,6 +25,7 @@ export function StatsDashboard() {
   const rtpHistory = useGameStore((s) => s.rtpHistory);
   const targetRTP = useGameStore((s) => s.config.math.targetRTP);
   const targetBF = useGameStore((s) => s.config.math.targetBF);
+  const mathTargets = useGameStore((s) => s.config.math.targets);
   const clearStats = useGameStore((s) => s.clearStats);
   const startSim = useGameStore((s) => s.startSim);
   const simRunning = useGameStore((s) => s.simRunning);
@@ -68,7 +69,7 @@ export function StatsDashboard() {
             value={stats.actualBF > 0 ? `1 / ${fmt(stats.actualBF, 0)}` : '—'}
             sub={`目標 1/${targetBF}`}
           />
-          <Stat label="中獎率" value={pct(stats.hitRate)} />
+          <Stat label="得分率" value={pct(stats.hitRate)} />
           <Stat label="最大贏分" value={fmt(stats.maxWin)} />
           <Stat label="平均贏分" value={fmt(stats.averageWin)} />
           <Stat label="平均 Bonus 間隔" value={stats.averageBonusInterval > 0 ? fmt(stats.averageBonusInterval, 0) : '—'} />
@@ -77,6 +78,34 @@ export function StatsDashboard() {
           <Stat label="總投注" value={fmtInt(stats.totalWager)} />
           <Stat label="總贏分" value={fmtInt(stats.totalWin)} />
         </div>
+
+        {/* Per-mode stats (得分率 / 平均得分倍) */}
+        {mathTargets.length > 0 && (
+          <div className="space-y-1">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">各模式得分率 / 平均得分倍</div>
+            <div className="divide-y divide-border rounded-md border border-border text-[11px]">
+              <div className="grid grid-cols-[3rem_1fr_1fr] gap-1 bg-muted/30 px-2 py-1 font-semibold text-muted-foreground">
+                <span>模式</span><span>得分率</span><span>均倍</span>
+              </div>
+              {mathTargets.map((t) => {
+                const actual = stats.modeStats[t.mode];
+                return (
+                  <div key={t.mode} className="grid grid-cols-[3rem_1fr_1fr] gap-1 px-2 py-1">
+                    <span className="font-semibold text-foreground">{t.mode}</span>
+                    <span>
+                      <span className="tabular-nums">{actual ? pct(actual.hitRate) : '—'}</span>
+                      <span className="ml-1 text-muted-foreground">/ {pct(t.hitRate, 1)}</span>
+                    </span>
+                    <span>
+                      <span className="tabular-nums">{actual ? fmt(actual.avgWinX) : '—'}</span>
+                      <span className="ml-1 text-muted-foreground">/ {fmt(t.avgWinX)}</span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* RTP convergence chart */}
         <div>

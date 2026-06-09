@@ -4,7 +4,7 @@ import { useGameStore } from '@/store/gameStore';
 import { symbolStyle } from '@/lib/symbolStyle';
 import { symbolIndex } from '@/engine/wild';
 import { spinVisualWeights } from '@/engine/reel';
-import { cn, fmtInt } from '@/lib/utils';
+import { cn, fmt, fmtInt } from '@/lib/utils';
 import type { AnimationType, GridResult } from '@/types';
 
 /**
@@ -63,6 +63,7 @@ export function SlotCanvas() {
   const speed = useGameStore((s) => s.speed);
   const collectPots = useGameStore((s) => s.collectPots);
   const featureLabel = useGameStore((s) => s.featureLabel);
+  const spinning = useGameStore((s) => s.spinning);
   const fcStages = useGameStore((s) => s.config.fakeCollect?.stages ?? 1);
   const bet = useGameStore((s) => s.bet);
 
@@ -136,6 +137,9 @@ export function SlotCanvas() {
   };
 
   // Idle: mirror the settled board when there is no active presentation.
+  // stepWin persists through FG spin gaps; it is cleared when (1) a new
+  // presentation starts, (2) a feature round ends (FloatingWin takes over),
+  // or (3) the board is reset (roundWin drops to 0 after init / config change).
   useEffect(() => {
     if (presentation) return;
     setCells(displayGrid.columns.map((c) => [...c]));
@@ -143,8 +147,17 @@ export function SlotCanvas() {
     setRemoving(new Set());
     setDropStep(0);
     setRevealCells(new Set());
-    setStepWin(null);
+    if (useGameStore.getState().roundWin <= 0) setStepWin(null);
   }, [displayGrid, presentation]);
+
+  // When a feature round finishes: clear stepWin so FloatingWin can show the
+  // settlement panel. Normal / cascade rounds keep stepWin until the next spin.
+  useEffect(() => {
+    if (!spinning) {
+      const round = useGameStore.getState().lastRound;
+      if (round && round.triggeredFeatures.length > 0) setStepWin(null);
+    }
+  }, [spinning]);
 
   // Timeline: intro reels → settle → cascade replay → finish.
   useEffect(() => {
@@ -203,7 +216,10 @@ export function SlotCanvas() {
       const winSet = new Set(s.winCells);
       at(t, () => {
         setWinHi(winSet);
-        if (p.showStepWin && s.winAmount > 0) setStepWin(s.winAmount);
+        if (s.winAmount > 0) {
+          setStepWin(s.winAmount);
+          useGameStore.getState().addStepWin(s.winAmount);
+        }
       });
       t += stepHi;
       if (p.cascade && p.steps[i + 1]) {
@@ -222,7 +238,8 @@ export function SlotCanvas() {
         schedule(i + 1);
       } else {
         t += stepDrop;
-        at(t, () => setStepWin(null));
+        // stepWin persists through FG gaps / normal round end; cleared by
+        // next presentation start or spinning effect (feature rounds).
         at(t, finish);
       }
     };
@@ -246,12 +263,14 @@ export function SlotCanvas() {
       {stepWin != null && stepWin > 0 && (
         <motion.div
           key={stepWin}
-          initial={{ scale: 0.6, opacity: 0 }}
+          initial={{ scale: 0.3, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: 'spring', stiffness: 420, damping: 16 }}
-          className="absolute left-1/2 top-9 z-30 -translate-x-1/2 rounded-full bg-emerald-500 px-3 py-0.5 text-sm font-black text-emerald-950 shadow"
+          transition={{ type: 'spring', stiffness: 320, damping: 18 }}
+          className="pointer-events-none absolute inset-0 z-30 flex flex-col items-center justify-center"
         >
-          +{fmtInt(stepWin)}
+          <div className="bg-gradient-to-b from-amber-200 to-amber-500 bg-clip-text text-5xl font-black tabular-nums text-transparent drop-shadow-lg">
+            {fmt(stepWin)}
+          </div>
         </motion.div>
       )}
       <div className="relative rounded-xl border border-border bg-background/40 p-3">

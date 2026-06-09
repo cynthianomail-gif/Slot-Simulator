@@ -1,5 +1,13 @@
 import type { RoundResult } from '@/types';
 
+/** Per-mode (NG / FG / BG) stats used in the dashboard. */
+export interface ModeStatsEntry {
+  spins: number;
+  hitRate: number;
+  /** Average win expressed as ×bet (winning spins only). */
+  avgWinX: number;
+}
+
 /** Computed, display-ready statistics snapshot. */
 export interface StatsSnapshot {
   totalRounds: number;
@@ -8,11 +16,27 @@ export interface StatsSnapshot {
   totalWin: number;
   actualRTP: number; // totalWin / totalWager
   actualBF: number; // 1-in-N rounds that hit a bonus (0 if none)
-  hitRate: number; // winning spins / total spins
+  hitRate: number; // winning spins / total spins  (得分率)
   maxWin: number; // largest single round win
   averageWin: number; // mean win over winning rounds
   averageBonusInterval: number; // mean rounds between bonus triggers
   bonusCount: number;
+  /** Per-mode breakdown keyed by mode label ('NG', 'FG', 'BG', …). */
+  modeStats: Record<string, ModeStatsEntry>;
+}
+
+/** Map an engine spin kind to a user-facing mode label. */
+function spinKindToMode(kind: string): string {
+  if (kind === 'normal') return 'NG';
+  if (kind === 'freegame' || kind === 'free') return 'FG';
+  return 'BG';
+}
+
+interface ModeAccum {
+  totalSpins: number;
+  winningSpins: number;
+  /** Cumulative win expressed in bet units (spinWin / bet). */
+  totalWinX: number;
 }
 
 /**
@@ -31,6 +55,7 @@ export class StatisticsEngine {
   private lastBonusRound = 0;
   private bonusIntervalSum = 0;
   private bonusIntervalCount = 0;
+  private modes = new Map<string, ModeAccum>();
 
   reset(): void {
     this.totalRounds = 0;
@@ -44,6 +69,7 @@ export class StatisticsEngine {
     this.lastBonusRound = 0;
     this.bonusIntervalSum = 0;
     this.bonusIntervalCount = 0;
+    this.modes.clear();
   }
 
   record(round: RoundResult): void {
@@ -52,7 +78,19 @@ export class StatisticsEngine {
     this.totalWin += round.totalWin;
     this.totalSpins += round.spins.length;
 
-    for (const s of round.spins) if (s.spinWin > 0) this.winningSpins++;
+    for (const s of round.spins) {
+      if (s.spinWin > 0) this.winningSpins++;
+
+      // per-mode accumulation
+      const mode = spinKindToMode(s.kind);
+      let m = this.modes.get(mode);
+      if (!m) { m = { totalSpins: 0, winningSpins: 0, totalWinX: 0 }; this.modes.set(mode, m); }
+      m.totalSpins++;
+      if (s.spinWin > 0) {
+        m.winningSpins++;
+        m.totalWinX += round.bet > 0 ? s.spinWin / round.bet : 0;
+      }
+    }
 
     if (round.totalWin > 0) this.winningRounds++;
     if (round.totalWin > this.maxWin) this.maxWin = round.totalWin;
@@ -68,6 +106,14 @@ export class StatisticsEngine {
   }
 
   snapshot(): StatsSnapshot {
+    const modeStats: Record<string, ModeStatsEntry> = {};
+    for (const [mode, m] of this.modes) {
+      modeStats[mode] = {
+        spins: m.totalSpins,
+        hitRate: m.totalSpins > 0 ? m.winningSpins / m.totalSpins : 0,
+        avgWinX: m.winningSpins > 0 ? m.totalWinX / m.winningSpins : 0,
+      };
+    }
     return {
       totalRounds: this.totalRounds,
       totalSpins: this.totalSpins,
@@ -83,6 +129,7 @@ export class StatisticsEngine {
           ? this.bonusIntervalSum / this.bonusIntervalCount
           : 0,
       bonusCount: this.bonusCount,
+      modeStats,
     };
   }
 }

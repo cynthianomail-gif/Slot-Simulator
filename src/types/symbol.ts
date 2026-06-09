@@ -24,11 +24,14 @@ export interface SymbolDefinition {
   /** Behavioural roles. A symbol may have several, e.g. ['wild','expanding']. */
   type: SymbolType[];
 
-  /** Base weight used by weight-based math mode. */
+  /** Base weight used by weight-based math mode (= NG weight). */
   weight: number;
 
-  /** Optional separate weight used during free-game spins (falls back to weight). */
-  fgWeight?: number;
+  /**
+   * Per-mode weight overrides keyed by mode label (e.g. 'FG', 'BG').
+   * Falls back to `weight` / `stackWeight` when a mode has no entry.
+   */
+  modeWeights?: Record<string, { weight: number; stackWeight?: number }>;
 
   /** Optional separate weight for stacked appearance. */
   stackWeight?: number;

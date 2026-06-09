@@ -26,6 +26,9 @@ export const defaultConfig: GameConfig = {
     mode: 'weight',
     targetRTP: 0.985,
     targetBF: 150,
+    targets: [
+      { mode: 'NG', hitRate: 0.25, avgWinX: 1.5 },
+    ],
   },
 
   grid: {

@@ -199,11 +199,11 @@ export class GameEngine {
 
     this.setState('SPINNING');
 
-    const useFg = kind === 'freegame' || kind === 'free';
+    const mode = kind === 'normal' ? 'NG' : (kind === 'freegame' || kind === 'free') ? 'FG' : 'BG';
     const outcome =
       this.forcedStops && kind === 'normal'
         ? gridFromStops(this.config, this.forcedStops)
-        : spinReels(this.config, this.rng, useFg);
+        : spinReels(this.config, this.rng, mode);
 
     this.lastReelStops = outcome.reelStops;
     this.setState('SPIN_STOP');
@@ -240,7 +240,7 @@ export class GameEngine {
         this.log.cascadeId++;
         this.setState('CASCADE_RUNNING');
         this.log.emit('CASCADE', { kind, step: this.log.cascadeId });
-        grid = this.cascadeRefill(grid, res, useFg);
+        grid = this.cascadeRefill(grid, res, mode);
       } else {
         break;
       }
@@ -268,7 +268,7 @@ export class GameEngine {
    *  - clearMatch : also remove every cell sharing a winning symbol id.
    *  - respin     : refill the cleared cells in place (no gravity).
    */
-  private cascadeRefill(grid: GridResult, res: EvalResult, useFg: boolean): GridResult {
+  private cascadeRefill(grid: GridResult, res: EvalResult, mode: string): GridResult {
     const method = this.config.cascade?.refill ?? 'fillDown';
     const remove = new Set<string>();
     for (const w of res.wins) {
@@ -284,7 +284,7 @@ export class GameEngine {
     }
 
     const pick = (col: number): string => {
-      const { ids, weights } = reelSymbolWeights(this.config, col, useFg);
+      const { ids, weights } = reelSymbolWeights(this.config, col, mode);
       return ids[this.rng.weightedIndex(weights)];
     };
 

@@ -26,11 +26,11 @@ export interface ReelOutcome {
 export function reelSymbolWeights(
   config: GameConfig,
   col: number,
-  useFg = false,
+  mode = 'NG',
 ): { ids: string[]; weights: number[] } {
   const reelNo = col + 1; // excludeReels is authored 1-indexed
   const w = (s: GameConfig['symbols'][number]) =>
-    Math.max(0, useFg ? s.fgWeight ?? s.weight : s.weight);
+    Math.max(0, (mode !== 'NG' && s.modeWeights?.[mode] != null) ? s.modeWeights[mode].weight : s.weight);
   const ids: string[] = [];
   const weights: number[] = [];
   for (const s of config.symbols) {
@@ -66,7 +66,7 @@ export function spinVisualWeights(
   return base;
 }
 
-export function spinReels(config: GameConfig, rng: IRng, useFg = false): ReelOutcome {
+export function spinReels(config: GameConfig, rng: IRng, mode = 'NG'): ReelOutcome {
   const shape = config.grid.shape;
   const cols = shape.length;
   const reelStops: number[] = new Array(cols).fill(0);
@@ -92,7 +92,7 @@ export function spinReels(config: GameConfig, rng: IRng, useFg = false): ReelOut
     // weight-based independent draws, per-reel (honours excludeReels + FG)
     for (let col = 0; col < cols; col++) {
       const rows = shape[col];
-      const { ids, weights } = reelSymbolWeights(config, col, useFg);
+      const { ids, weights } = reelSymbolWeights(config, col, mode);
       const column: string[] = [];
       for (let r = 0; r < rows; r++) {
         const idx = rng.weightedIndex(weights);
