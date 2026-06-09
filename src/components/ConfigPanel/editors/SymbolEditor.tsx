@@ -1,7 +1,7 @@
 import { useGameStore } from '@/store/gameStore';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/misc';
+import { Badge, Switch } from '@/components/ui/misc';
 import { Section, ItemCard, Mini, parseNums, parseList } from './fields';
 import { symbolStyle } from '@/lib/symbolStyle';
 import { Plus, Trash2 } from 'lucide-react';
@@ -78,6 +78,27 @@ export function SymbolEditor() {
               <Mini label="屬性（逗號分隔）" className="col-span-2">
                 <Input className="h-8" defaultValue={(sym.properties ?? []).join(', ')} onBlur={(e) => update((c) => { c.symbols[i].properties = parseList(e.target.value); })} />
               </Mini>
+              <div className="col-span-2 pt-0.5">
+                <Switch
+                  checked={sym.excludeReels !== undefined}
+                  onCheckedChange={(v) => update((c) => {
+                    c.symbols[i].excludeReels = v ? (c.symbols[i].excludeReels ?? []) : undefined;
+                  })}
+                  label="並非每輪都出現"
+                />
+              </div>
+              {sym.excludeReels !== undefined && (
+                <Mini label="不出現的輪（輪號，逗號分隔）" className="col-span-2">
+                  <Input
+                    className="h-8"
+                    placeholder="例：2, 4"
+                    defaultValue={sym.excludeReels.join(', ')}
+                    onBlur={(e) => update((c) => {
+                      c.symbols[i].excludeReels = parseNums(e.target.value).map((n) => Math.max(1, Math.floor(n)));
+                    })}
+                  />
+                </Mini>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-1">

@@ -1,4 +1,4 @@
-import type { GameConfig, GridResult, SymbolDefinition } from '@/types';
+import type { GameConfig, GridResult } from '@/types';
 import type { IRng } from './rng';
 
 /**
@@ -18,17 +18,49 @@ export interface ReelOutcome {
   reelStops: number[];
 }
 
-function symbolWeightMap(symbols: SymbolDefinition[]): {
-  ids: string[];
-  weights: number[];
-} {
+/**
+ * Symbols (and their weights) eligible to land on a given reel (0-indexed col).
+ * Symbols whose `excludeReels` lists this reel (1-indexed) are dropped. Used by
+ * both the weight math and the spinning visuals so the two always agree.
+ */
+export function reelSymbolWeights(
+  config: GameConfig,
+  col: number,
+): { ids: string[]; weights: number[] } {
+  const reelNo = col + 1; // excludeReels is authored 1-indexed
   const ids: string[] = [];
   const weights: number[] = [];
-  for (const s of symbols) {
+  for (const s of config.symbols) {
+    if (s.excludeReels?.includes(reelNo)) continue;
     ids.push(s.id);
     weights.push(Math.max(0, s.weight));
   }
+  // never leave a reel empty
+  if (ids.length === 0) {
+    for (const s of config.symbols) {
+      ids.push(s.id);
+      weights.push(Math.max(0, s.weight));
+    }
+  }
   return { ids, weights };
+}
+
+/**
+ * Weights for the spinning blur visual on a reel. Defaults to the math weights,
+ * but when a custom "假盤" (fake board) is enabled it uses those overrides
+ * instead — still limited to the symbols that may appear on this reel.
+ */
+export function spinVisualWeights(
+  config: GameConfig,
+  col: number,
+): { ids: string[]; weights: number[] } {
+  const base = reelSymbolWeights(config, col);
+  const fr = config.fakeReel;
+  if (fr?.enabled && fr.weights[col]) {
+    const weights = base.ids.map((id) => Math.max(0, fr.weights[col]?.[id] ?? 0));
+    if (weights.some((w) => w > 0)) return { ids: base.ids, weights };
+  }
+  return base;
 }
 
 export function spinReels(config: GameConfig, rng: IRng): ReelOutcome {
@@ -54,10 +86,10 @@ export function spinReels(config: GameConfig, rng: IRng): ReelOutcome {
       columns.push(column);
     }
   } else {
-    // weight-based independent draws
-    const { ids, weights } = symbolWeightMap(config.symbols);
+    // weight-based independent draws, per-reel (honours excludeReels)
     for (let col = 0; col < cols; col++) {
       const rows = shape[col];
+      const { ids, weights } = reelSymbolWeights(config, col);
       const column: string[] = [];
       for (let r = 0; r < rows; r++) {
         const idx = rng.weightedIndex(weights);

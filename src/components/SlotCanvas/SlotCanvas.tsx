@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { symbolStyle } from '@/lib/symbolStyle';
 import { symbolIndex } from '@/engine/wild';
-import { cn } from '@/lib/utils';
+import { spinVisualWeights } from '@/engine/reel';
+import { cn, fmtInt } from '@/lib/utils';
 import type { AnimationType } from '@/types';
 
 /**
@@ -31,11 +32,30 @@ export function SlotCanvas() {
   const presentation = useGameStore((s) => s.presentation);
   const displayGrid = useGameStore((s) => s.displayGrid);
   const speed = useGameStore((s) => s.speed);
+  const collectPots = useGameStore((s) => s.collectPots);
+  const fcStages = useGameStore((s) => s.config.fakeCollect?.stages ?? 1);
+  const bet = useGameStore((s) => s.bet);
 
   const idx = useMemo(() => symbolIndex(config), [config]);
-  const pool = useMemo(() => config.symbols.map((s) => s.id), [config]);
 
   const cols = (presentation?.steps[0].grid.columns ?? displayGrid.columns).length;
+
+  // Per-reel weighted "bag" of symbol ids for the spinning blur. Mirrors the
+  // weight math: each reel samples its own eligible symbols by weight (so reel
+  // exclusions and weights from the 圖示 tab show up in the spin visuals too).
+  const reelPools = useMemo(() => {
+    const pools: string[][] = [];
+    for (let col = 0; col < cols; col++) {
+      const { ids, weights } = spinVisualWeights(config, col);
+      const bag: string[] = [];
+      ids.forEach((id, i) => {
+        const n = Math.max(1, Math.round(weights[i] * 2));
+        for (let k = 0; k < n; k++) bag.push(id);
+      });
+      pools.push(bag.length ? bag : ids);
+    }
+    return pools;
+  }, [config, cols]);
   const size = Math.max(40, Math.min(78, Math.floor(460 / Math.max(1, cols))));
   const gap = 8;
 
@@ -173,7 +193,7 @@ export function SlotCanvas() {
   const showIntro = presentation != null && presentation.id !== settledId;
 
   return (
-    <div className="flex h-full w-full items-center justify-center p-4">
+    <div className="relative flex h-full w-full items-center justify-center p-4">
       <div className="relative rounded-xl border border-border bg-background/40 p-3">
         {/* Settled board — always rendered as the base layer. The spinning
             overlay below covers it until the reels land, so revealing it can
@@ -228,13 +248,73 @@ export function SlotCanvas() {
                 gap={gap}
                 spinTime={presentation.spinTimeMs}
                 stopInterval={presentation.stopIntervalMs}
-                pool={pool}
+                pool={reelPools[ci] ?? reelPools[0] ?? []}
                 tile={tile}
               />
             ))}
           </div>
         )}
+
+        {/* 假收集 — persistent pots sit ABOVE each reel (outside the top of the
+            board) and grow as they upgrade stages */}
+        {collectPots && (
+          <div className="absolute left-3 top-3 z-20">
+            {collectPots.map((p, idx2) => (
+              <CollectPotView
+                key={idx2}
+                cx={p.col * (size + gap) + size / 2}
+                cell={size}
+                stage={p.stage}
+                stages={fcStages}
+                bet={bet}
+              />
+            ))}
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+/* ----------------------------- 假收集 pot --------------------------------- */
+
+interface CollectPotProps {
+  cx: number;
+  cell: number;
+  stage: number;
+  stages: number;
+  bet: number;
+}
+
+function CollectPotView({ cx, cell, stage, stages, bet }: CollectPotProps) {
+  const frac = stages > 1 ? (stage - 1) / (stages - 1) : 0.5;
+  const potSize = cell * (0.55 + 0.5 * frac);
+  const value = Math.round(bet * 0.2 * stage * stage); // grows with stage
+  // sit above the board: top:-12 cancels the container's p-3, then the pot is
+  // translated fully upward so its base rests on the board's top edge.
+  return (
+    <div className="absolute" style={{ left: cx, top: -12 }}>
+      <motion.div
+        className="grid -translate-x-1/2 -translate-y-full place-items-center rounded-2xl bg-gradient-to-br from-amber-300 to-amber-500 shadow-lg ring-2 ring-amber-200"
+        animate={{ width: potSize, height: potSize }}
+        transition={{ type: 'spring', stiffness: 320, damping: 17 }}
+      >
+        <motion.div
+          key={stage}
+          initial={{ scale: 0.7 }}
+          animate={{ scale: 1 }}
+          transition={{ type: 'spring', stiffness: 420, damping: 14 }}
+          className="flex flex-col items-center leading-none text-amber-950"
+        >
+          <span className="font-black" style={{ fontSize: potSize * 0.36 }}>$</span>
+          <span className="font-black tabular-nums" style={{ fontSize: potSize * 0.22 }}>
+            {fmtInt(value)}
+          </span>
+        </motion.div>
+        <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-amber-900 px-1 text-[9px] font-bold text-amber-100">
+          {stage}
+        </span>
+      </motion.div>
     </div>
   );
 }

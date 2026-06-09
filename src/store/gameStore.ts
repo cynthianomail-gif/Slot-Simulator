@@ -84,9 +84,13 @@ interface GameStore {
   simProgress: number;
   simReport: SimulationReport | null;
 
+  /* fake collect (假收集) — persistent pots above the board */
+  collectPots: CollectPot[] | null;
+
   /* actions */
   init: () => void;
   spin: () => void;
+  advanceFakeCollect: (onComplete?: () => void) => void;
   stopSpin: () => void;
   finishPresentation: () => void;
   buy: (optionId: string) => void;
@@ -105,12 +109,49 @@ interface GameStore {
   clearEvents: () => void;
 }
 
+/** One pot sitting ABOVE a reel. Persistent while 假收集 is enabled. */
+export interface CollectPot {
+  col: number; // reel index the pot sits above
+  stage: number;
+}
+
 /* module-scoped, non-reactive handles */
 let session: Session = createSession(defaultConfig, 0);
 let liveStats = new StatisticsEngine();
 let presentationSeq = 0;
 let pendingRound: RoundResult | null = null;
 let pendingFinalGrid: GridResult | null = null;
+let fcTimers: number[] = [];
+
+/**
+ * Reconcile the persistent pots with the current config: one pot above each of
+ * the first `count` reels, preserving stages of pots that already exist. Returns
+ * null when 假收集 is disabled.
+ */
+function reconcileCollect(config: GameConfig, prev: CollectPot[] | null): CollectPot[] | null {
+  const fc = config.fakeCollect;
+  if (!fc?.enabled || fc.count <= 0) return null;
+  const n = Math.max(0, Math.min(fc.count, config.grid.cols));
+  return Array.from({ length: n }, (_, col) => ({ col, stage: prev?.[col]?.stage ?? 1 }));
+}
+
+/** Roll a pot's next stage from the upgrade weight matrix. */
+function rollStage(s: number, cfg: NonNullable<GameConfig['fakeCollect']>): number {
+  const row = cfg.upgrade[s - 1];
+  if (!row) return s;
+  const opts: { stage: number; w: number }[] = [{ stage: s, w: Math.max(0, row.stay) }];
+  for (let k = 0; k < 4; k++) {
+    if (s + (k + 1) <= cfg.stages) opts.push({ stage: s + (k + 1), w: Math.max(0, row.up[k] ?? 0) });
+  }
+  const total = opts.reduce((a, o) => a + o.w, 0);
+  if (total <= 0) return s;
+  let r = Math.random() * total;
+  for (const o of opts) {
+    if (r < o.w) return o.stage;
+    r -= o.w;
+  }
+  return s;
+}
 
 export const useGameStore = create<GameStore>((set, get) => ({
   config: clone(defaultConfig),
@@ -148,6 +189,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   simProgress: 0,
   simReport: null,
 
+  collectPots: null,
+
   /* ------------------------------ init ------------------------------ */
   init: () => {
     const { config, useFixedSeed, seed } = get();
@@ -163,6 +206,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       roundWin: 0,
       lastRound: null,
       state: 'IDLE',
+      collectPots: reconcileCollect(config, null),
     });
   },
 
@@ -259,20 +303,44 @@ export const useGameStore = create<GameStore>((set, get) => ({
       state: 'IDLE',
     }));
 
-    // auto-spin continuation
-    const cur = get();
-    if (cur.autoInfinite) {
-      if (cur.balance >= cur.bet) setTimeout(() => get().spin(), 150);
-      else set({ autoInfinite: false });
-    } else if (cur.autoRemaining > 0) {
-      const left = cur.autoRemaining - 1;
-      set({ autoRemaining: left });
-      if (left > 0 && cur.balance >= cur.bet) setTimeout(() => get().spin(), 150);
-    }
+    // auto-spin continuation (deferred until the fake-collect overlay, if any,
+    // has finished so each spin's collect plays out fully)
+    const continueAuto = () => {
+      const cur = get();
+      if (cur.autoInfinite) {
+        if (cur.balance >= cur.bet) setTimeout(() => get().spin(), 150);
+        else set({ autoInfinite: false });
+      } else if (cur.autoRemaining > 0) {
+        const left = cur.autoRemaining - 1;
+        set({ autoRemaining: left });
+        if (left > 0 && cur.balance >= cur.bet) setTimeout(() => get().spin(), 150);
+      }
+    };
+
+    // 假收集 advances the persistent pots after every spin when enabled
+    const fc = get().config.fakeCollect;
+    if (fc?.enabled && get().collectPots) get().advanceFakeCollect(continueAuto);
+    else continueAuto();
   },
 
   stopSpin: () => {
     get().finishPresentation();
+  },
+
+  /* --------------------------- fake collect ------------------------- */
+  // Advance the persistent pots by one upgrade roll each (called after a spin).
+  advanceFakeCollect: (onComplete) => {
+    const cfg = get().config.fakeCollect;
+    const pots = get().collectPots;
+    if (!cfg?.enabled || !pots || pots.length === 0) { onComplete?.(); return; }
+
+    fcTimers.forEach((t) => clearTimeout(t));
+    fcTimers = [];
+
+    const next = pots.map((p) => ({ ...p, stage: rollStage(p.stage, cfg) }));
+    set({ collectPots: next });
+    // let the grow / pop animation play before continuing (e.g. auto-spin)
+    fcTimers.push(window.setTimeout(() => onComplete?.(), 700));
   },
 
   /* ------------------------------ buy ------------------------------- */
@@ -335,9 +403,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // rebuild engine session against new config (keeps seed mode)
     const { useFixedSeed, seed } = get();
     session = createSession(next, useFixedSeed ? seed : null);
-    set({
+    set((s) => ({
       displayGrid: emptyGrid(next.grid.shape, next.symbols.at(-1)?.id ?? 'LJ'),
-    });
+      collectPots: reconcileCollect(next, s.collectPots),
+    }));
   },
 
   resetConfig: () => {

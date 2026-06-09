@@ -119,6 +119,34 @@ export interface GameConfig {
     strips: string[][];
   };
 
+  /**
+   * "假盤" — spin-visual weight overrides, decoupled from the math weights.
+   * When enabled, the spinning blur samples these instead of symbol weights.
+   */
+  fakeReel?: {
+    enabled: boolean;
+    /** weights[col][symbolId] — relative weights used ONLY for the spin blur. */
+    weights: Record<number, Record<string, number>>;
+  };
+
+  /**
+   * "假收集" — pots placed on the board plus a stage-upgrade model.
+   * Configuration only (the live pot animation consumes it separately).
+   */
+  fakeCollect?: {
+    enabled: boolean;
+    /** Number of pots placed on the board. */
+    count: number;
+    /** Number of collection stages. */
+    stages: number;
+    /**
+     * Per current stage (index 0 = stage 1) the upgrade chances, in %.
+     * up[k] = chance to jump (k+1) stages; stay = chance to remain.
+     * Each row should sum to 100.
+     */
+    upgrade: { up: number[]; stay: number }[];
+  };
+
   triggers: TriggerDef[];
 
   features: FeatureConfigEntry[];

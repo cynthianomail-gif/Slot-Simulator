@@ -46,14 +46,14 @@ export function Switch({
     >
       <span
         className={cn(
-          'relative h-5 w-9 rounded-full transition-colors',
+          'relative inline-block h-5 w-9 shrink-0 rounded-full transition-colors',
           checked ? 'bg-primary' : 'bg-muted',
         )}
       >
         <span
           className={cn(
-            'absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform',
-            checked ? 'translate-x-4' : 'translate-x-0.5',
+            'absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform',
+            checked ? 'translate-x-4' : 'translate-x-0',
           )}
         />
       </span>

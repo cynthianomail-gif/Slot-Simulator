@@ -31,6 +31,12 @@ export interface SymbolDefinition {
   stackWeight?: number;
 
   /**
+   * Reels (1-indexed) this symbol must NOT appear on. Undefined = appears on
+   * every reel. Applied by weight math and the spinning visuals alike.
+   */
+  excludeReels?: number[];
+
+  /**
    * Payout table indexed by (matchCount - minMatch).
    * e.g. for a payline game minMatch=3, payout[0] = pay for 3 of a kind.
    */
