@@ -20,10 +20,10 @@ export function ControlBar() {
   const autoActive = s.autoInfinite || s.autoRemaining > 0;
 
   return (
-    <div className="flex items-center gap-3 border-t border-border bg-card/70 px-4 py-2.5">
+    <div className="flex items-center gap-3 border-t border-border bg-gradient-to-t from-card via-card/90 to-card/70 px-4 py-3">
       {/* User area */}
       <div className="flex items-center gap-2">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary to-sky-700 text-sm font-bold text-white">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary to-sky-700 text-sm font-bold text-white shadow-md shadow-primary/20 ring-1 ring-white/10">
           {s.config.user.name.slice(0, 1).toUpperCase()}
         </div>
         <div className="leading-tight">
@@ -34,11 +34,11 @@ export function ControlBar() {
         </div>
       </div>
 
-      <div className="h-8 w-px bg-border" />
+      <div className="h-8 w-px bg-border/60" />
 
       {/* Bet area */}
-      <div className="flex items-center gap-1">
-        <div className="text-[10px] uppercase text-muted-foreground">押注</div>
+      <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-background/50 px-2 py-1">
+        <div className="text-[10px] uppercase text-muted-foreground mr-1">押注</div>
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => stepBet(-1)} disabled={s.spinning}>
           <Minus className="h-3.5 w-3.5" />
         </Button>
@@ -48,12 +48,12 @@ export function ControlBar() {
         </Button>
       </div>
 
-      <div className="h-8 w-px bg-border" />
+      <div className="h-8 w-px bg-border/60" />
 
       {/* Win area */}
       <div className="min-w-[140px]">
         <div className="text-[10px] uppercase text-muted-foreground">本局總贏分</div>
-        <div className="text-lg font-bold tabular-nums text-emerald-400">{fmt(s.roundWin)}</div>
+        <div className={`text-xl font-black tabular-nums ${s.roundWin > 0 ? 'text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.3)]' : 'text-muted-foreground/60'}`}>{fmt(s.roundWin)}</div>
       </div>
 
       <div className="flex-1" />
@@ -101,7 +101,7 @@ export function ControlBar() {
         <Button
           variant={s.spinning ? 'destructive' : 'default'}
           size="lg"
-          className="min-w-[110px]"
+          className={`min-w-[120px] text-base font-bold ${s.spinning ? '' : 'shadow-lg shadow-primary/30 ring-1 ring-primary/20'}`}
           onClick={s.spin}
           disabled={!s.spinning && s.balance < s.bet}
         >

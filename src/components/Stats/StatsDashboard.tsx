@@ -47,6 +47,9 @@ export function StatsDashboard() {
     downloadCsv(`slot_${safe}_${stamp}.csv`, csv);
   };
 
+  const rtpDiff = stats.totalRounds > 0 ? Math.abs(stats.actualRTP - targetRTP) : 0;
+  const rtpAccent = stats.totalRounds === 0 ? undefined : rtpDiff < 0.02 ? 'green' as const : rtpDiff < 0.05 ? 'amber' as const : 'red' as const;
+
   return (
     <Card className="flex flex-col">
       <CardHeader className="flex-row items-center justify-between">
@@ -59,11 +62,13 @@ export function StatsDashboard() {
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        {/* Key metrics */}
         <div className="grid grid-cols-2 gap-2">
           <Stat
             label="實際 RTP"
             value={pct(stats.actualRTP)}
             sub={`目標 ${pct(targetRTP, 1)}`}
+            accent={rtpAccent}
           />
           <Stat
             label="實際 BF"
@@ -71,13 +76,24 @@ export function StatsDashboard() {
             sub={`目標 1/${targetBF}`}
           />
           <Stat label="得分率" value={pct(stats.hitRate)} />
-          <Stat label="最大贏分" value={fmt(stats.maxWin)} />
-          <Stat label="平均贏分" value={fmt(stats.averageWin)} />
+          <Stat label="最大贏分倍" value={`${fmt(stats.maxWinX)}x`} accent="amber" />
+          <Stat label="平均贏分倍" value={`${fmt(stats.averageWinX)}x`} />
           <Stat label="平均 Bonus 間隔" value={stats.averageBonusInterval > 0 ? fmt(stats.averageBonusInterval, 0) : '—'} />
-          <Stat label="總盤數" value={fmtInt(stats.totalSpins)} />
-          <Stat label="總局數" value={fmtInt(stats.totalRounds)} />
-          <Stat label="總投注" value={fmtInt(stats.totalWager)} />
-          <Stat label="總贏分" value={fmtInt(stats.totalWin)} />
+        </div>
+
+        {/* Volume stats */}
+        <div className="grid grid-cols-4 gap-1.5">
+          {([
+            ['局數', fmtInt(stats.totalRounds)],
+            ['盤數', fmtInt(stats.totalSpins)],
+            ['投注', fmtInt(stats.totalWager)],
+            ['贏分', fmtInt(stats.totalWin)],
+          ] as const).map(([k, v]) => (
+            <div key={k} className="rounded-md bg-background/40 px-2 py-1.5 text-center">
+              <div className="text-[9px] uppercase text-muted-foreground">{k}</div>
+              <div className="text-[11px] font-semibold tabular-nums">{v}</div>
+            </div>
+          ))}
         </div>
 
         {/* Per-mode stats (得分率 / 平均得分倍) */}
@@ -131,8 +147,8 @@ export function StatsDashboard() {
         </div>
 
         {/* Simulation */}
-        <div className="space-y-2 rounded-md border border-border p-2">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+        <div className="space-y-2 rounded-lg border border-border/60 bg-gradient-to-br from-secondary/30 to-transparent p-2.5">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             數學模擬（無畫面）
           </div>
           <div className="flex gap-2">

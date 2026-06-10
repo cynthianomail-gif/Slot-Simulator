@@ -17,8 +17,8 @@ export interface StatsSnapshot {
   actualRTP: number; // totalWin / totalWager
   actualBF: number; // 1-in-N rounds that hit a bonus (0 if none)
   hitRate: number; // winning spins / total spins  (得分率)
-  maxWin: number; // largest single round win
-  averageWin: number; // mean win over winning rounds
+  maxWinX: number; // largest single round win as ×bet
+  averageWinX: number; // mean win over winning rounds as ×bet
   averageBonusInterval: number; // mean rounds between bonus triggers
   bonusCount: number;
   /** Per-mode breakdown keyed by mode label ('NG', 'FG', 'BG', …). */
@@ -50,7 +50,8 @@ export class StatisticsEngine {
   private totalWin = 0;
   private winningRounds = 0;
   private winningSpins = 0;
-  private maxWin = 0;
+  private maxWinX = 0;
+  private sumWinX = 0;
   private bonusCount = 0;
   private lastBonusRound = 0;
   private bonusIntervalSum = 0;
@@ -64,7 +65,8 @@ export class StatisticsEngine {
     this.totalWin = 0;
     this.winningRounds = 0;
     this.winningSpins = 0;
-    this.maxWin = 0;
+    this.maxWinX = 0;
+    this.sumWinX = 0;
     this.bonusCount = 0;
     this.lastBonusRound = 0;
     this.bonusIntervalSum = 0;
@@ -92,8 +94,12 @@ export class StatisticsEngine {
       }
     }
 
-    if (round.totalWin > 0) this.winningRounds++;
-    if (round.totalWin > this.maxWin) this.maxWin = round.totalWin;
+    if (round.totalWin > 0) {
+      this.winningRounds++;
+      const winX = round.bet > 0 ? round.totalWin / round.bet : 0;
+      this.sumWinX += winX;
+      if (winX > this.maxWinX) this.maxWinX = winX;
+    }
 
     if (round.triggeredFeatures.length > 0) {
       this.bonusCount++;
@@ -122,8 +128,8 @@ export class StatisticsEngine {
       actualRTP: this.totalWager > 0 ? this.totalWin / this.totalWager : 0,
       actualBF: this.bonusCount > 0 ? this.totalRounds / this.bonusCount : 0,
       hitRate: this.totalSpins > 0 ? this.winningSpins / this.totalSpins : 0,
-      maxWin: this.maxWin,
-      averageWin: this.winningRounds > 0 ? this.totalWin / this.winningRounds : 0,
+      maxWinX: this.maxWinX,
+      averageWinX: this.winningRounds > 0 ? this.sumWinX / this.winningRounds : 0,
       averageBonusInterval:
         this.bonusIntervalCount > 0
           ? this.bonusIntervalSum / this.bonusIntervalCount

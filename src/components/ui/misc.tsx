@@ -66,11 +66,12 @@ export function Separator({ className }: { className?: string }) {
   return <div className={cn('h-px w-full bg-border', className)} />;
 }
 
-export function Stat({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
+export function Stat({ label, value, sub, accent }: { label: string; value: React.ReactNode; sub?: string; accent?: 'green' | 'red' | 'amber' }) {
+  const accentClass = accent === 'green' ? 'text-emerald-400' : accent === 'red' ? 'text-red-400' : accent === 'amber' ? 'text-amber-400' : '';
   return (
-    <div className="rounded-md border border-border bg-background/40 p-2">
+    <div className="rounded-lg border border-border/60 bg-gradient-to-br from-background/60 to-background/30 p-2.5">
       <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="text-base font-semibold tabular-nums">{value}</div>
+      <div className={cn('text-[15px] font-bold tabular-nums', accentClass)}>{value}</div>
       {sub && <div className="text-[10px] text-muted-foreground">{sub}</div>}
     </div>
   );

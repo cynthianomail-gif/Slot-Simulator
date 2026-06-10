@@ -43,6 +43,9 @@ export class WinDistTracker {
       return _naturalTotalWin;
     }
 
+    // No visual win on the board → no payout (board must match display)
+    if (_naturalTotalWin <= 0) return 0;
+
     const group = isFeatureRound ? 'FG' : 'NG';
 
     // --- Step 1: 取牌 — pick tier by percentage (normalized within group) ---

@@ -11,7 +11,7 @@ describe('default config math verification', () => {
     const r = await runSimulation(defaultConfig, { rounds: 400_000, bet: 100, seed: 7, chunk: 100_000 });
     // eslint-disable-next-line no-console
     console.log(
-      `[SHIPPED] RTP=${(r.actualRTP * 100).toFixed(2)}% BF=1/${r.actualBF.toFixed(0)} hit=${(r.hitRate * 100).toFixed(1)}% maxWinX=${(r.maxWin / 100).toFixed(0)} ${Math.round(r.roundsPerSec)} rounds/s`,
+      `[SHIPPED] RTP=${(r.actualRTP * 100).toFixed(2)}% BF=1/${r.actualBF.toFixed(0)} hit=${(r.hitRate * 100).toFixed(1)}% maxWinX=${r.maxWinX.toFixed(1)} ${Math.round(r.roundsPerSec)} rounds/s`,
     );
     expect(r.actualRTP).toBeGreaterThan(0.95);
     expect(r.actualRTP).toBeLessThan(1.02);

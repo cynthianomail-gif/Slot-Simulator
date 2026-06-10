@@ -147,8 +147,8 @@ export function buildConfigCsv(
   rows.push(['實際 RTP Actual RTP', `${(stats.actualRTP * 100).toFixed(4)}%`]);
   rows.push(['實際 BF Actual BF', stats.actualBF > 0 ? `1/${stats.actualBF.toFixed(2)}` : '']);
   rows.push(['得分率 Hit Rate', `${(stats.hitRate * 100).toFixed(4)}%`]);
-  rows.push(['最大贏分 Max Win', stats.maxWin]);
-  rows.push(['平均贏分 Average Win', stats.averageWin.toFixed(2)]);
+  rows.push(['最大贏分倍 Max Win x', `${stats.maxWinX.toFixed(2)}x`]);
+  rows.push(['平均贏分倍 Avg Win x', `${stats.averageWinX.toFixed(2)}x`]);
   rows.push(['平均 Bonus 間隔 Avg Bonus Interval', stats.averageBonusInterval.toFixed(2)]);
   rows.push(['Bonus 次數 Bonus Count', stats.bonusCount]);
   rows.push(['總局數 Total Rounds', stats.totalRounds]);
@@ -172,9 +172,8 @@ export function buildConfigCsv(
     rows.push(['實際 RTP Actual RTP', `${(sim.actualRTP * 100).toFixed(4)}%`]);
     rows.push(['實際 BF Actual BF', sim.actualBF > 0 ? `1/${sim.actualBF.toFixed(2)}` : '']);
     rows.push(['得分率 Hit Rate', `${(sim.hitRate * 100).toFixed(4)}%`]);
-    rows.push(['最大贏分 Max Win', sim.maxWin]);
-    rows.push(['最大贏分倍數 Max Win x', (sim.maxWin / sim.bet).toFixed(1)]);
-    rows.push(['平均贏分 Average Win', sim.averageWin.toFixed(2)]);
+    rows.push(['最大贏分倍 Max Win x', `${sim.maxWinX.toFixed(2)}x`]);
+    rows.push(['平均贏分倍 Avg Win x', `${sim.averageWinX.toFixed(2)}x`]);
     rows.push(['平均 Bonus 間隔 Avg Bonus Interval', sim.averageBonusInterval.toFixed(2)]);
     rows.push(['耗時(ms) Elapsed', sim.elapsedMs.toFixed(0)]);
     rows.push(['效能 Rounds/s', sim.roundsPerSec.toFixed(0)]);

@@ -17,12 +17,15 @@ export default function App() {
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
       {/* Top bar */}
-      <header className="flex items-center justify-between border-b border-border bg-card/60 px-4 py-2">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded bg-gradient-to-br from-primary to-accent font-black text-primary-foreground">
+      <header className="flex items-center justify-between border-b border-border bg-gradient-to-r from-card via-card/80 to-card px-4 py-2">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary via-primary to-accent shadow-md shadow-primary/25 font-black text-sm text-primary-foreground ring-1 ring-white/10">
             S
           </div>
-          <div className="text-sm font-semibold leading-none">Slot Simulator</div>
+          <div>
+            <div className="text-sm font-bold leading-none tracking-wide">Slot Simulator</div>
+            <div className="text-[10px] text-muted-foreground">Math & Visual Prototyping</div>
+          </div>
         </div>
       </header>
 
@@ -41,7 +44,7 @@ export default function App() {
         </div>
 
         {/* Right: stats + debug */}
-        <div className="flex min-h-0 flex-col gap-3 overflow-y-auto border-l border-border p-3">
+        <div className="flex min-h-0 flex-col gap-3 overflow-y-auto border-l border-border bg-card/20 p-3">
           <StatsDashboard />
           <DebugPanel />
         </div>
