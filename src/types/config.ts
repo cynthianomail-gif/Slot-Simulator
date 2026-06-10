@@ -91,6 +91,20 @@ export interface AnimationProfile {
   roundGap?: number;
 }
 
+/* ------------------------------ Win Distribution ------------------------- */
+
+export interface WinTier {
+  label: string;
+  /** 'NG' for normal game, 'FG' for all feature modes (FG, BG, etc.) */
+  group: 'NG' | 'FG';
+  /** Win multiplier range lower bound (inclusive). */
+  min: number;
+  /** Win multiplier range upper bound (inclusive), null = unbounded (e.g. 32+). */
+  max: number | null;
+  /** Target percentage of total rounds that fall into this tier. */
+  percent: number;
+}
+
 /* ------------------------------ GameConfig ------------------------------- */
 
 export interface GameConfig {
@@ -108,6 +122,8 @@ export interface GameConfig {
     targetBF: number;
     /** Per-mode targets: hit rate & average win multiplier. */
     targets: MathTarget[];
+    /** Win distribution tiers (8 tiers, percentages should sum to 100). */
+    winDistribution?: WinTier[];
   };
 
   grid: {

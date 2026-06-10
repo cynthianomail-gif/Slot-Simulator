@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/misc';
 import { regularShape } from '@/engine/grid';
 import { Plus, X } from 'lucide-react';
-import type { PayMode, MathTarget } from '@/types';
+import type { PayMode, MathTarget, WinTier } from '@/types';
 
 export function GeneralEditor() {
   const config = useGameStore((s) => s.config);
@@ -31,6 +31,7 @@ export function GeneralEditor() {
           />
         </div>
         <MathTargetsEditor />
+        <WinDistributionEditor />
       </Section>
 
       <Section title="盤面" desc="輪數（直行）與每輪列數">
@@ -224,6 +225,120 @@ function MathTargetsEditor() {
       <p className="text-[11px] leading-snug text-muted-foreground">
         得分率 0~1，平均得分倍＝得分局的平均贏分 ÷ 注額。
       </p>
+    </div>
+  );
+}
+
+/* ----------------------------- win distribution ----------------------------- */
+
+const DEFAULT_WIN_DIST: WinTier[] = [
+  { label: 'NG低倍', group: 'NG', min: 0, max: 2, percent: 20 },
+  { label: 'NG小倍', group: 'NG', min: 2, max: 8, percent: 10 },
+  { label: 'NG中倍', group: 'NG', min: 8, max: 32, percent: 5 },
+  { label: 'NG大倍', group: 'NG', min: 32, max: null, percent: 5 },
+  { label: 'FG小倍', group: 'FG', min: 0, max: 60, percent: 30 },
+  { label: 'FG中倍', group: 'FG', min: 60, max: 120, percent: 15 },
+  { label: 'FG大倍', group: 'FG', min: 120, max: 600, percent: 10 },
+  { label: 'FG超大倍', group: 'FG', min: 600, max: null, percent: 5 },
+];
+
+function WinDistributionEditor() {
+  const config = useGameStore((s) => s.config);
+  const update = useGameStore((s) => s.updateConfig);
+  const tiers = config.math.winDistribution ?? DEFAULT_WIN_DIST;
+  const total = tiers.reduce((s, t) => s + t.percent, 0);
+  const isValid = Math.abs(total - 100) < 0.01;
+
+  const setTierField = (i: number, key: 'min' | 'max' | 'percent' | 'label', v: number | string | null) =>
+    update((c) => {
+      const list = (c.math.winDistribution ??= DEFAULT_WIN_DIST.map((t) => ({ ...t })));
+      if (key === 'label') list[i].label = v as string;
+      else if (key === 'min') list[i].min = v as number;
+      else if (key === 'max') list[i].max = v as number | null;
+      else if (key === 'percent') list[i].percent = v as number;
+    });
+
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
+      <div className="flex items-center justify-between">
+        <div className="text-[13px] font-medium text-foreground">各模式占比</div>
+        <span className={`text-[11px] font-medium tabular-nums ${isValid ? 'text-muted-foreground' : 'text-red-500'}`}>
+          合計 {total.toFixed(1)}%{!isValid && ' ≠ 100%'}
+        </span>
+      </div>
+
+      {/* NG header */}
+      <div className="text-[11px] font-semibold text-muted-foreground">NG 一般遊戲</div>
+      <div className="space-y-1.5">
+        {tiers.map((t, i) => {
+          if (t.group !== 'NG') return null;
+          return (
+            <TierRow key={i} tier={t} index={i} onChange={setTierField} />
+          );
+        })}
+      </div>
+
+      {/* FG header */}
+      <div className="text-[11px] font-semibold text-muted-foreground">FG 功能遊戲（含 FG / BG / 其他）</div>
+      <div className="space-y-1.5">
+        {tiers.map((t, i) => {
+          if (t.group !== 'FG') return null;
+          return (
+            <TierRow key={i} tier={t} index={i} onChange={setTierField} />
+          );
+        })}
+      </div>
+
+      {!isValid && (
+        <p className="text-[11px] font-medium text-red-500">
+          ⚠ 8 個占比加總需等於 100%，目前為 {total.toFixed(1)}%
+        </p>
+      )}
+    </div>
+  );
+}
+
+function TierRow({ tier, index, onChange }: {
+  tier: WinTier;
+  index: number;
+  onChange: (i: number, key: 'min' | 'max' | 'percent' | 'label', v: number | string | null) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Input
+        className="h-7 w-20 text-xs"
+        defaultValue={tier.label}
+        onBlur={(e) => onChange(index, 'label', e.target.value)}
+      />
+      <div className="flex items-center gap-1">
+        <Input
+          className="h-7 w-14 px-1 text-center text-xs"
+          type="number"
+          defaultValue={tier.min}
+          onBlur={(e) => onChange(index, 'min', parseFloat(e.target.value) || 0)}
+        />
+        <span className="text-[10px] text-muted-foreground">~</span>
+        <Input
+          className="h-7 w-14 px-1 text-center text-xs"
+          type="text"
+          defaultValue={tier.max === null ? '' : tier.max}
+          placeholder="∞"
+          onBlur={(e) => {
+            const v = e.target.value.trim();
+            onChange(index, 'max', v === '' || v === '∞' ? null : parseFloat(v) || 0);
+          }}
+        />
+      </div>
+      <div className="flex items-center gap-1 ml-auto">
+        <Input
+          className="h-7 w-16 px-1 text-center text-xs"
+          type="number"
+          step={1}
+          defaultValue={tier.percent}
+          onBlur={(e) => onChange(index, 'percent', parseFloat(e.target.value) || 0)}
+        />
+        <span className="text-[10px] text-muted-foreground">%</span>
+      </div>
     </div>
   );
 }

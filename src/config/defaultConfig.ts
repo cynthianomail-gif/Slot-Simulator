@@ -29,6 +29,16 @@ export const defaultConfig: GameConfig = {
     targets: [
       { mode: 'NG', hitRate: 0.25, avgWinX: 1.5 },
     ],
+    winDistribution: [
+      { label: 'NG低倍', group: 'NG', min: 0, max: 2, percent: 20 },
+      { label: 'NG小倍', group: 'NG', min: 2, max: 8, percent: 10 },
+      { label: 'NG中倍', group: 'NG', min: 8, max: 32, percent: 5 },
+      { label: 'NG大倍', group: 'NG', min: 32, max: null, percent: 5 },
+      { label: 'FG小倍', group: 'FG', min: 0, max: 60, percent: 30 },
+      { label: 'FG中倍', group: 'FG', min: 60, max: 120, percent: 15 },
+      { label: 'FG大倍', group: 'FG', min: 120, max: 600, percent: 10 },
+      { label: 'FG超大倍', group: 'FG', min: 600, max: null, percent: 5 },
+    ],
   },
 
   grid: {

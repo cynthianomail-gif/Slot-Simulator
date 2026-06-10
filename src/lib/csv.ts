@@ -52,6 +52,15 @@ export function buildConfigCsv(
   rows.push(['玩家 User', config.user.name]);
   rows.push(['餘額 Balance', config.user.balance]);
 
+  // --- win distribution ---
+  if (config.math.winDistribution?.length) {
+    section('各模式占比 WIN DISTRIBUTION');
+    rows.push(['名稱 Label', '分組 Group', '區間下限 Min', '區間上限 Max', '占比% Percent']);
+    for (const t of config.math.winDistribution) {
+      rows.push([t.label, t.group, t.min, t.max ?? '∞', t.percent]);
+    }
+  }
+
   // --- symbols ---
   section('圖示 SYMBOLS');
   const ranges = config.pay.payRanges;
