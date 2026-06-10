@@ -119,6 +119,13 @@ export interface GameConfig {
     mode: PayMode;
     /** Minimum matching symbols required to pay (payline/ways: 3, cluster: e.g. 8). */
     minMatch: number;
+    /**
+     * Maximum matching tier in the payout table.
+     * Determines how many payout columns each symbol has:
+     *   payout.length = maxMatch - minMatch + 1
+     * If omitted, derived from the longest existing payout array.
+     */
+    maxMatch?: number;
     paylines?: PaylineDef[];
     /** Cluster minimum override (falls back to minMatch). */
     clusterMin?: number;

@@ -39,6 +39,7 @@ export const defaultConfig: GameConfig = {
   pay: {
     mode: 'payline',
     minMatch: 3,
+    maxMatch: 5,
     paylines: PAYLINES_5x3,
     clusterMin: 8,
   },

@@ -43,8 +43,14 @@ export interface SymbolDefinition {
   excludeReels?: number[];
 
   /**
-   * Payout table indexed by (matchCount - minMatch).
-   * e.g. for a payline game minMatch=3, payout[0] = pay for 3 of a kind.
+   * Pay multiplier table indexed by (matchCount - minMatch).
+   * payout.length should equal (maxMatch - minMatch + 1).
+   * e.g. for a payline game minMatch=3, maxMatch=5:
+   *   payout[0] = multiplier for 3-of-a-kind
+   *   payout[1] = multiplier for 4-of-a-kind
+   *   payout[2] = multiplier for 5-of-a-kind
+   * For cluster pay with minMatch=8, maxMatch=12:
+   *   payout[0] = multiplier for 8 symbols, etc.
    */
   payout: number[];
 

@@ -55,7 +55,7 @@ export function buildConfigCsv(
   // --- symbols ---
   section('圖示 SYMBOLS');
   const maxPay = Math.max(0, ...config.symbols.map((s) => s.payout.length));
-  const payCols = Array.from({ length: maxPay }, (_, i) => `賠付x${config.pay.minMatch + i} (${config.pay.minMatch + i}OAK)`);
+  const payCols = Array.from({ length: maxPay }, (_, i) => `賠率x${config.pay.minMatch + i} (${config.pay.minMatch + i}OAK)`);
   // collect all mode keys across all symbols
   const allModes = new Set<string>();
   for (const s of config.symbols) {

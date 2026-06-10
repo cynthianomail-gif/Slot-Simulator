@@ -548,8 +548,33 @@ export const useGameStore = create<GameStore>((set, get) => {
   clearCheats: () => set((s) => ({ cheats: { ...s.cheats, armedTriggers: [], forceMaxWin: false } })),
 
   updateConfig: (mutator) => {
-    const next = clone(get().config);
+    const prev = get().config;
+    const next = clone(prev);
     mutator(next);
+
+    // When the pay range changes, resize every symbol's payout array so it
+    // always has exactly (maxMatch - minMatch + 1) entries.
+    const prevMin = prev.pay.minMatch;
+    const prevMax = prev.pay.maxMatch ?? prevMin + Math.max(0, ...prev.symbols.map((s) => s.payout.length)) - 1;
+    const nextMin = next.pay.minMatch;
+    const nextMax = next.pay.maxMatch ?? nextMin + Math.max(0, ...next.symbols.map((s) => s.payout.length)) - 1;
+    if (nextMin !== prevMin || nextMax !== prevMax) {
+      // Clamp: maxMatch must be >= minMatch
+      if (nextMax < nextMin) next.pay.maxMatch = nextMin;
+      const newLen = (next.pay.maxMatch ?? nextMax) - nextMin + 1;
+      for (const sym of next.symbols) {
+        const old = sym.payout;
+        const arr = new Array<number>(newLen).fill(0);
+        // copy old values aligned by their absolute match-count
+        for (let k = 0; k < old.length; k++) {
+          const absCount = prevMin + k; // absolute match count this entry was for
+          const j = absCount - nextMin; // new index
+          if (j >= 0 && j < newLen) arr[j] = old[k];
+        }
+        sym.payout = arr;
+      }
+    }
+
     set({ config: next });
     // rebuild engine session against new config (keeps seed mode)
     const { useFixedSeed, seed } = get();

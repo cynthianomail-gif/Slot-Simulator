@@ -9,7 +9,13 @@ import type { SymbolType } from '@/types';
 
 export function SymbolEditor() {
   const symbols = useGameStore((s) => s.config.symbols);
+  const pay = useGameStore((s) => s.config.pay);
   const update = useGameStore((s) => s.updateConfig);
+
+  const minMatch = pay.mode === 'cluster' ? (pay.clusterMin ?? pay.minMatch) : pay.minMatch;
+  const maxMatch = pay.maxMatch ?? minMatch + Math.max(0, ...symbols.map((s) => s.payout.length)) - 1;
+  const paySlots = maxMatch - minMatch + 1;
+  const unit = pay.mode === 'cluster' ? '顆' : '連';
 
   const addSymbol = () =>
     update((c) => {
@@ -18,14 +24,14 @@ export function SymbolEditor() {
         name: '新圖示',
         type: ['normal'],
         weight: 5,
-        payout: [1, 2, 5],
+        payout: new Array(paySlots).fill(0),
       });
     });
 
   return (
     <Section
       title="圖示"
-      desc={`盤面符號、權重與賠付（共 ${symbols.length} 個）`}
+      desc={`盤面符號、權重與賠率（共 ${symbols.length} 個）`}
       action={
         <Button size="sm" variant="secondary" className="h-7 px-2" onClick={addSymbol}>
           <Plus className="h-3.5 w-3.5" /> 新增
@@ -67,9 +73,29 @@ export function SymbolEditor() {
                 <Input className="h-8" type="number" defaultValue={sym.stackWeight ?? ''} onBlur={(e) => update((c) => { c.symbols[i].stackWeight = e.target.value ? parseFloat(e.target.value) : undefined; })} />
               </Mini>
               <ModeWeightsRow index={i} modeWeights={sym.modeWeights} />
-              <Mini label="賠付（3連, 4連, 5連…）" className="col-span-2">
-                <Input className="h-8" defaultValue={sym.payout.join(', ')} onBlur={(e) => update((c) => { c.symbols[i].payout = parseNums(e.target.value); })} />
-              </Mini>
+              <div className="col-span-2">
+                <div className="mb-1 text-[10px] font-medium text-muted-foreground">賠率</div>
+                <div className="flex gap-1.5">
+                  {Array.from({ length: paySlots }, (_, k) => {
+                    const count = minMatch + k;
+                    return (
+                      <div key={count} className="flex-1 min-w-0">
+                        <div className="mb-0.5 text-center text-[9px] text-muted-foreground/70">{count}{unit}</div>
+                        <Input
+                          className="h-7 px-1 text-center text-xs"
+                          type="number"
+                          defaultValue={sym.payout[k] ?? 0}
+                          onBlur={(e) => update((c) => {
+                            const arr = c.symbols[i].payout;
+                            while (arr.length < paySlots) arr.push(0);
+                            arr[k] = parseFloat(e.target.value) || 0;
+                          })}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
               <Mini label="類型（逗號分隔）" className="col-span-2">
                 <Input className="h-8" defaultValue={sym.type.join(', ')} onBlur={(e) => update((c) => { c.symbols[i].type = parseList(e.target.value) as SymbolType[]; })} />
               </Mini>

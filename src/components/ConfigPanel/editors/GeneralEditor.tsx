@@ -84,19 +84,35 @@ export function GeneralEditor() {
         </Field>
 
         {mode === 'cluster' ? (
-          <NumField
-            label="群集最小數"
-            hint="相連的同符號至少幾個才賠付"
-            value={config.pay.clusterMin ?? 8}
-            onChange={(v) => update((c) => { c.pay.clusterMin = v; })}
-          />
+          <>
+            <NumField
+              label="群集最小數"
+              hint="相連的同符號至少幾個開始賠付"
+              value={config.pay.clusterMin ?? config.pay.minMatch}
+              onChange={(v) => update((c) => { c.pay.clusterMin = v; c.pay.minMatch = v; })}
+            />
+            <NumField
+              label="群集最大數"
+              hint="賠率表的最高顆數上限"
+              value={config.pay.maxMatch ?? (config.pay.clusterMin ?? config.pay.minMatch) + 4}
+              onChange={(v) => update((c) => { c.pay.maxMatch = v; })}
+            />
+          </>
         ) : (
-          <NumField
-            label="最小連線數"
-            hint="連續幾個相同符號開始賠付（通常 3）"
-            value={config.pay.minMatch}
-            onChange={(v) => update((c) => { c.pay.minMatch = v; })}
-          />
+          <>
+            <NumField
+              label="最小連線數"
+              hint="連續幾個相同符號開始賠付（通常 3）"
+              value={config.pay.minMatch}
+              onChange={(v) => update((c) => { c.pay.minMatch = v; })}
+            />
+            <NumField
+              label="最大連線數"
+              hint="賠率表的最高連線上限"
+              value={config.pay.maxMatch ?? config.pay.minMatch + 2}
+              onChange={(v) => update((c) => { c.pay.maxMatch = v; })}
+            />
+          </>
         )}
 
         {mode === 'payline' && <PaylineEditor />}
