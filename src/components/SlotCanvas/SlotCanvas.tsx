@@ -140,13 +140,27 @@ export function SlotCanvas() {
   // stepWin persists through FG spin gaps; it is cleared when (1) a new
   // presentation starts, (2) a feature round ends (FloatingWin takes over),
   // or (3) the board is reset (roundWin drops to 0 after init / config change).
+  //
+  // Uses functional setters: if the data hasn't actually changed (e.g. the
+  // settle timer already filled cells with the same grid), we return the
+  // previous reference so React skips the re-render — this prevents a
+  // compositor flash caused by an unnecessary render cycle right after settle.
   useEffect(() => {
     if (presentation) return;
-    setCells(displayGrid.columns.map((c) => [...c]));
-    setWinHi(new Set());
-    setRemoving(new Set());
-    setDropStep(0);
-    setRevealCells(new Set());
+    setCells((prev) => {
+      const next = displayGrid.columns;
+      if (
+        prev.length === next.length &&
+        prev.every((c, i) => c.length === next[i].length && c.every((v, j) => v === next[i][j]))
+      ) {
+        return prev;
+      }
+      return next.map((c) => [...c]);
+    });
+    setWinHi((prev) => (prev.size === 0 ? prev : new Set()));
+    setRemoving((prev) => (prev.size === 0 ? prev : new Set()));
+    setDropStep((prev) => (prev === 0 ? prev : 0));
+    setRevealCells((prev) => (prev.size === 0 ? prev : new Set()));
     if (useGameStore.getState().roundWin <= 0) setStepWin(null);
   }, [displayGrid, presentation]);
 
@@ -210,7 +224,11 @@ export function SlotCanvas() {
     const schedule = (i: number) => {
       const s = p.steps[i];
       if (!s || s.winCells.length === 0) {
-        at(t, finish);
+        // Small delay after settle so the browser paints the settled board
+        // before finishPresentation triggers further state changes.  Without
+        // this the settle timer and finish fire in the same tick, and the
+        // resulting re-render cycle can cause a brief compositor flash.
+        at(t + 20, finish);
         return;
       }
       const winSet = new Set(s.winCells);
@@ -294,7 +312,17 @@ export function SlotCanvas() {
                     animate={
                       isRem
                         ? { scale: 0, opacity: 0, rotate: 10 }
-                        : { y: 0, rotateX: 0, opacity: 1, filter: 'blur(0px)', scale: isWin ? 1.12 : 1 }
+                        : {
+                            y: 0,
+                            rotateX: 0,
+                            opacity: 1,
+                            scale: isWin ? 1.12 : 1,
+                            // Only include filter for reveal cells that animate
+                            // from blur — setting filter on every cell forces a
+                            // GPU compositing layer per tile and causes a brief
+                            // flash when the board re-renders after settle.
+                            ...(isReveal ? { filter: 'blur(0px)' } : {}),
+                          }
                     }
                     transition={
                       isRem
