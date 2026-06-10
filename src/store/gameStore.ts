@@ -171,6 +171,7 @@ let currentSpinWin = 0;
 let accumulatedWin = 0;
 let featureTotal = 0;
 let featureDone = 0;
+let roundWinScale = 1;
 
 function featureName(kind: string): string {
   switch (kind) {
@@ -193,12 +194,13 @@ function buildPresentation(
   turbo: boolean,
   fallback: GridResult,
   bet: number,
+  winScale: number,
 ): Presentation {
   const profile = turbo ? config.animation.turbo : config.animation.normal;
   const steps: PresentationStep[] = (spin.gridSteps ?? []).map((g, i) => ({
     grid: g,
     winCells: (spin.cascades[i]?.wins ?? []).flatMap((w) => w.cells.map((c) => `${c.col}:${c.row}`)),
-    winAmount: (spin.cascades[i]?.totalPay ?? 0) * bet,
+    winAmount: (spin.cascades[i]?.totalPay ?? 0) * bet * winScale,
   }));
   if (steps.length === 0) steps.push({ grid: spin.gridSteps?.at(-1) ?? fallback, winCells: [], winAmount: 0 });
   return {
@@ -208,9 +210,9 @@ function buildPresentation(
     stopIntervalMs: profile.stopInterval,
     bounceMs: profile.bounceDuration,
     cascade: config.cascade?.enabled ?? false,
-    showStepWin: true, // 連爆 always shows each step's win
+    showStepWin: true,
     steps,
-    spinWinAmount: spin.spinWin,
+    spinWinAmount: spin.spinWin * winScale,
   };
 }
 
@@ -252,7 +254,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     const spin = spinQueue.shift();
     if (!spin) return;
     currentSpinFinalGrid = spin.gridSteps?.at(-1) ?? spin.grid;
-    currentSpinWin = spin.spinWin;
+    currentSpinWin = spin.spinWin * roundWinScale;
     let label: string | null = null;
     if (spin.kind !== 'normal') {
       featureDone++;
@@ -260,7 +262,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     }
     const st = get();
     set({
-      presentation: buildPresentation(spin, st.config, st.speed === 'turbo', st.displayGrid, st.bet),
+      presentation: buildPresentation(spin, st.config, st.speed === 'turbo', st.displayGrid, st.bet, roundWinScale),
       featureLabel: label,
     });
   };
@@ -416,6 +418,10 @@ export const useGameStore = create<GameStore>((set, get) => {
     accumulatedWin = 0;
     featureDone = 0;
     featureTotal = round.spins.filter((s) => s.kind !== 'normal').length;
+
+    // Scale step win displays so animation totals match the distribution-adjusted totalWin
+    const naturalTotal = round.spins.reduce((a, s) => a + s.spinWin, 0);
+    roundWinScale = naturalTotal > 0 ? round.totalWin / naturalTotal : 1;
 
     // no-animation fast path: settle straight to the final grid
     if (!st.animationEnabled) {
