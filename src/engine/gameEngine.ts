@@ -180,6 +180,12 @@ export class GameEngine {
       totalWin = this.distTracker.adjust(totalWin, this.bet, isFeature, this.rng);
     }
 
+    // Hard cap: single round never exceeds 12000× bet
+    const MAX_WIN_X = 12_000;
+    if (this.bet > 0 && totalWin > MAX_WIN_X * this.bet) {
+      totalWin = MAX_WIN_X * this.bet;
+    }
+
     this.setState('ROUND_END');
     this.log.emit('ROUND_END', {
       totalWin,
