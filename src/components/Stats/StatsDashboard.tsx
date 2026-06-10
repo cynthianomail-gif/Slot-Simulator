@@ -43,7 +43,7 @@ export function StatsDashboard() {
   const exportCsv = () => {
     const csv = buildConfigCsv(config, stats, simReport);
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-    downloadCsv(`slot_模擬數據_${stamp}.csv`, csv);
+    downloadCsv(`slot_模擬數據_${stamp}.xls`, csv);
   };
 
   const rtpDiff = stats.totalRounds > 0 ? Math.abs(stats.actualRTP - targetRTP) : 0;
@@ -55,7 +55,7 @@ export function StatsDashboard() {
         <CardTitle>統計</CardTitle>
         <div className="flex items-center gap-1">
           <Button variant="outline" size="sm" onClick={exportCsv}>
-            <Download className="h-3.5 w-3.5" /> 匯出 CSV
+            <Download className="h-3.5 w-3.5" /> 匯出 Excel
           </Button>
           <Button variant="ghost" size="sm" onClick={clearStats}>重置</Button>
         </div>

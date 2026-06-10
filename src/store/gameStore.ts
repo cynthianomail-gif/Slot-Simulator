@@ -197,20 +197,28 @@ function buildPresentation(
   winScale: number,
 ): Presentation {
   const profile = turbo ? config.animation.turbo : config.animation.normal;
-  const steps: PresentationStep[] = (spin.gridSteps ?? []).map((g, i) => ({
-    grid: g,
-    winCells: (spin.cascades[i]?.wins ?? []).flatMap((w) => w.cells.map((c) => `${c.col}:${c.row}`)),
-    winAmount: (spin.cascades[i]?.totalPay ?? 0) * bet * winScale,
-  }));
-  if (steps.length === 0) steps.push({ grid: spin.gridSteps?.at(-1) ?? fallback, winCells: [], winAmount: 0 });
+
+  let steps: PresentationStep[];
+  if (winScale <= 0) {
+    const finalGrid = spin.gridSteps?.at(-1) ?? spin.grid ?? fallback;
+    steps = [{ grid: finalGrid, winCells: [], winAmount: 0 }];
+  } else {
+    steps = (spin.gridSteps ?? []).map((g, i) => ({
+      grid: g,
+      winCells: (spin.cascades[i]?.wins ?? []).flatMap((w) => w.cells.map((c) => `${c.col}:${c.row}`)),
+      winAmount: (spin.cascades[i]?.totalPay ?? 0) * bet * winScale,
+    }));
+    if (steps.length === 0) steps.push({ grid: spin.gridSteps?.at(-1) ?? fallback, winCells: [], winAmount: 0 });
+  }
+
   return {
     id: ++presentationSeq,
     mode: config.animation.type,
     spinTimeMs: profile.totalSpinTime,
     stopIntervalMs: profile.stopInterval,
     bounceMs: profile.bounceDuration,
-    cascade: config.cascade?.enabled ?? false,
-    showStepWin: true,
+    cascade: winScale > 0 && (config.cascade?.enabled ?? false),
+    showStepWin: winScale > 0,
     steps,
     spinWinAmount: spin.spinWin * winScale,
   };

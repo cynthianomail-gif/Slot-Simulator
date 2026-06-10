@@ -16,7 +16,7 @@ const PAYLINES_5x3: PaylineDef[] = [
 ];
 
 export const defaultConfig: GameConfig = {
-  meta: { name: '範例拉霸 — 水晶連線', version: '0.1.0' },
+  meta: { name: '範例', version: '0.1.0' },
 
   user: { name: 'Player', balance: 1_000_000 },
 

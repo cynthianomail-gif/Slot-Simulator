@@ -2,103 +2,142 @@ import type { GameConfig } from '@/types';
 import type { StatsSnapshot } from '@/engine/statistics';
 import type { SimulationReport } from '@/engine/simulation';
 
-type Row = (string | number)[];
+const S = {
+  headerBg: '#1e3a5f',
+  headerFg: '#ffffff',
+  sectionBg: '#2a4a6b',
+  sectionFg: '#ffffff',
+  rowEven: '#f8fafc',
+  rowOdd: '#eef2f7',
+  border: '#c0c8d4',
+  ok: '#16a34a',
+  warn: '#d97706',
+  bad: '#dc2626',
+  labelBg: '#dbeafe',
+};
 
-function cell(v: string | number): string {
-  const s = String(v ?? '');
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+function esc(v: string | number): string {
+  return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function rowsToCsv(rows: Row[]): string {
-  return rows.map((r) => r.map(cell).join(',')).join('\r\n');
-}
-
-function deviation(actual: number, target: number, tolerance: number): string {
-  if (target === 0) return '';
+function deviation(actual: number, target: number, tolerance: number): { label: string; color: string } {
+  if (target === 0) return { label: '', color: '' };
   const diff = Math.abs(actual - target) / target;
-  if (diff <= tolerance) return '✓';
-  if (diff <= tolerance * 2.5) return '△';
-  return '✗';
+  if (diff <= tolerance) return { label: '✓', color: S.ok };
+  if (diff <= tolerance * 2.5) return { label: '△', color: S.warn };
+  return { label: '✗', color: S.bad };
 }
 
-const SEP_4 = ['════════════', '════════════', '════════════', '════════════'];
-const SEP_5 = ['════════════', '════════════', '════════════', '════════════', '════════════'];
+function pct(v: number, d = 2): string {
+  return `${(v * 100).toFixed(d)}%`;
+}
+
+const DASH = '—';
+
+function sectionHeader(title: string, colspan: number): string {
+  return `<tr><td colspan="${colspan}" style="background:${S.sectionBg};color:${S.sectionFg};font-weight:bold;font-size:13px;padding:6px 8px;text-align:left;">${esc(title)}</td></tr>`;
+}
+
+function th(text: string): string {
+  return `<th style="background:${S.headerBg};color:${S.headerFg};font-weight:bold;padding:5px 10px;text-align:center;border:1px solid ${S.border};font-size:11px;">${esc(text)}</th>`;
+}
+
+function td(text: string | number, opts?: { align?: string; bg?: string; color?: string; bold?: boolean }): string {
+  const a = opts?.align ?? 'center';
+  const bg = opts?.bg ? `background:${opts.bg};` : '';
+  const fg = opts?.color ? `color:${opts.color};` : '';
+  const b = opts?.bold ? 'font-weight:bold;' : '';
+  return `<td style="padding:4px 8px;text-align:${a};border:1px solid ${S.border};${bg}${fg}${b}font-size:11px;">${esc(text)}</td>`;
+}
+
+function statusTd(dev: { label: string; color: string }): string {
+  if (!dev.label) return td('');
+  return td(dev.label, { color: dev.color, bold: true });
+}
 
 export function buildConfigCsv(
   config: GameConfig,
   stats: StatsSnapshot,
   sim: SimulationReport | null,
 ): string {
-  const rows: Row[] = [];
-  const pct = (v: number, d = 2) => `${(v * 100).toFixed(d)}%`;
-  const dash = '—';
+  const lines: string[] = [];
+  const push = (s: string) => lines.push(s);
 
-  // ═══ Header ═══
-  rows.push(['遊戲名稱', config.meta.name, '', '版本', config.meta.version]);
-  rows.push(['數學模式', config.math.mode, '', '匯出時間', new Date().toLocaleString('zh-TW')]);
-  rows.push([]);
+  push('<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">');
+  push('<head><meta charset="utf-8">');
+  push('<style>table{border-collapse:collapse;font-family:"Microsoft JhengHei","PingFang TC",sans-serif;}');
+  push(`td,th{white-space:nowrap;}</style></head><body>`);
 
-  // ═══ 目標 vs 實際 + 統計詳情（合併） ═══
+  // ═══ Game Info ═══
+  push('<table>');
+  push(`<tr>${td('遊戲名稱', { bg: S.labelBg, bold: true, align: 'right' })}${td(config.meta.name, { align: 'left' })}${td('')}${td('版本', { bg: S.labelBg, bold: true, align: 'right' })}${td(config.meta.version, { align: 'left' })}</tr>`);
+  push(`<tr>${td('', { bg: S.labelBg })}${td('', { align: 'left' })}${td('')}${td('匯出時間', { bg: S.labelBg, bold: true, align: 'right' })}${td(new Date().toLocaleString('zh-TW'), { align: 'left' })}</tr>`);
+  push('</table><br>');
+
+  // ═══ Target vs Actual ═══
   const simLabel = sim ? `模擬 (${sim.rounds.toLocaleString()} 局)` : '模擬';
-  rows.push(['【 目標 vs 實際 】', '', '', '', '']);
-  rows.push(SEP_5);
-  rows.push(['指標', '目標', '即時統計', simLabel, '狀態']);
-  rows.push(SEP_5);
+  push('<table>');
+  push(sectionHeader('目標 vs 實際', 5));
+  push(`<tr>${th('指標')}${th('目標')}${th('即時統計')}${th(simLabel)}${th('狀態')}</tr>`);
 
+  const dataRow = (label: string, target: string, live: string, simVal: string, dev: { label: string; color: string }, i: number) => {
+    const bg = i % 2 === 0 ? S.rowEven : S.rowOdd;
+    return `<tr>${td(label, { bg, bold: true, align: 'left' })}${td(target, { bg })}${td(live, { bg })}${td(simVal, { bg })}${statusTd(dev)}</tr>`;
+  };
+
+  let ri = 0;
   const rtpDev = (a: number) => deviation(a, config.math.targetRTP, 0.02);
-  rows.push(['RTP', pct(config.math.targetRTP), pct(stats.actualRTP, 4), sim ? pct(sim.actualRTP, 4) : dash, sim ? rtpDev(sim.actualRTP) : rtpDev(stats.actualRTP)]);
+  push(dataRow('RTP', pct(config.math.targetRTP), pct(stats.actualRTP, 4), sim ? pct(sim.actualRTP, 4) : DASH, sim ? rtpDev(sim.actualRTP) : rtpDev(stats.actualRTP), ri++));
 
-  const bfTarget = config.math.targetBF;
-  const bfDev = (a: number) => deviation(a, bfTarget, 0.15);
-  rows.push(['BF (1/N)', `1/${bfTarget}`, stats.actualBF > 0 ? `1/${stats.actualBF.toFixed(0)}` : dash, sim ? (sim.actualBF > 0 ? `1/${sim.actualBF.toFixed(0)}` : dash) : dash, sim && sim.actualBF > 0 ? bfDev(sim.actualBF) : (stats.actualBF > 0 ? bfDev(stats.actualBF) : '')]);
+  const bfDev = (a: number) => deviation(a, config.math.targetBF, 0.15);
+  push(dataRow('BF (1/N)', `1/${config.math.targetBF}`, stats.actualBF > 0 ? `1/${stats.actualBF.toFixed(0)}` : DASH, sim ? (sim.actualBF > 0 ? `1/${sim.actualBF.toFixed(0)}` : DASH) : DASH, sim && sim.actualBF > 0 ? bfDev(sim.actualBF) : (stats.actualBF > 0 ? bfDev(stats.actualBF) : { label: '', color: '' }), ri++));
 
-  rows.push(['得分率', dash, pct(stats.hitRate, 4), sim ? pct(sim.hitRate, 4) : dash, '']);
+  push(dataRow('得分率', DASH, pct(stats.hitRate, 4), sim ? pct(sim.hitRate, 4) : DASH, { label: '', color: '' }, ri++));
 
   for (const t of config.math.targets ?? []) {
     const liveMode = stats.modeStats[t.mode];
     const simMode = sim?.modeStats[t.mode];
     const hrDev = (a: number) => deviation(a, t.hitRate, 0.05);
     const wxDev = (a: number) => deviation(a, t.avgWinX, 0.1);
-    rows.push([`${t.mode} 得分率`, pct(t.hitRate), liveMode ? pct(liveMode.hitRate, 4) : dash, simMode ? pct(simMode.hitRate, 4) : dash, simMode ? hrDev(simMode.hitRate) : (liveMode ? hrDev(liveMode.hitRate) : '')]);
-    rows.push([`${t.mode} 均倍`, `${t.avgWinX.toFixed(2)}x`, liveMode ? `${liveMode.avgWinX.toFixed(4)}x` : dash, simMode ? `${simMode.avgWinX.toFixed(4)}x` : dash, simMode ? wxDev(simMode.avgWinX) : (liveMode ? wxDev(liveMode.avgWinX) : '')]);
-    rows.push([`${t.mode} 盤數`, dash, liveMode ? liveMode.spins : dash, simMode ? simMode.spins : dash, '']);
+    push(dataRow(`${t.mode} 得分率`, pct(t.hitRate), liveMode ? pct(liveMode.hitRate, 4) : DASH, simMode ? pct(simMode.hitRate, 4) : DASH, simMode ? hrDev(simMode.hitRate) : (liveMode ? hrDev(liveMode.hitRate) : { label: '', color: '' }), ri++));
+    push(dataRow(`${t.mode} 均倍`, `${t.avgWinX.toFixed(2)}x`, liveMode ? `${liveMode.avgWinX.toFixed(4)}x` : DASH, simMode ? `${simMode.avgWinX.toFixed(4)}x` : DASH, simMode ? wxDev(simMode.avgWinX) : (liveMode ? wxDev(liveMode.avgWinX) : { label: '', color: '' }), ri++));
+    push(dataRow(`${t.mode} 盤數`, DASH, liveMode ? String(liveMode.spins) : DASH, simMode ? String(simMode.spins) : DASH, { label: '', color: '' }, ri++));
   }
 
-  rows.push(SEP_5);
-
-  // key stats rows
-  rows.push(['最大贏分倍', '', `${stats.maxWinX.toFixed(2)}x`, sim ? `${sim.maxWinX.toFixed(2)}x` : dash, '']);
-  rows.push(['平均贏分倍', '', `${stats.averageWinX.toFixed(2)}x`, sim ? `${sim.averageWinX.toFixed(2)}x` : dash, '']);
-  rows.push(['平均 Bonus 間隔', '', stats.averageBonusInterval > 0 ? stats.averageBonusInterval.toFixed(0) : dash, sim ? (sim.averageBonusInterval > 0 ? sim.averageBonusInterval.toFixed(0) : dash) : dash, '']);
-  rows.push(['Bonus 次數', '', stats.bonusCount, sim ? sim.bonusCount : dash, '']);
-  rows.push(['總局數', '', stats.totalRounds, sim ? sim.rounds : dash, '']);
-  rows.push(['總盤數', '', stats.totalSpins, sim ? sim.totalSpins : dash, '']);
-  rows.push(['總投注', '', stats.totalWager, sim ? sim.totalWager : dash, '']);
-  rows.push(['總贏分', '', stats.totalWin, sim ? sim.totalWin : dash, '']);
-
+  // Stats detail rows
+  push(`<tr><td colspan="5" style="background:${S.headerBg};height:2px;padding:0;"></td></tr>`);
+  const statRow = (label: string, live: string, simVal: string, i: number) => {
+    const bg = i % 2 === 0 ? S.rowEven : S.rowOdd;
+    return `<tr>${td(label, { bg, bold: true, align: 'left' })}${td('', { bg })}${td(live, { bg })}${td(simVal, { bg })}${td('', { bg })}</tr>`;
+  };
+  push(statRow('最大贏分倍', `${stats.maxWinX.toFixed(2)}x`, sim ? `${sim.maxWinX.toFixed(2)}x` : DASH, ri++));
+  push(statRow('平均贏分倍', `${stats.averageWinX.toFixed(2)}x`, sim ? `${sim.averageWinX.toFixed(2)}x` : DASH, ri++));
+  push(statRow('平均 Bonus 間隔', stats.averageBonusInterval > 0 ? stats.averageBonusInterval.toFixed(0) : DASH, sim ? (sim.averageBonusInterval > 0 ? sim.averageBonusInterval.toFixed(0) : DASH) : DASH, ri++));
+  push(statRow('Bonus 次數', String(stats.bonusCount), sim ? String(sim.bonusCount) : DASH, ri++));
+  push(statRow('總局數', String(stats.totalRounds), sim ? String(sim.rounds) : DASH, ri++));
+  push(statRow('總盤數', String(stats.totalSpins), sim ? String(sim.totalSpins) : DASH, ri++));
+  push(statRow('總投注', String(stats.totalWager), sim ? String(sim.totalWager) : DASH, ri++));
+  push(statRow('總贏分', String(stats.totalWin), sim ? String(sim.totalWin) : DASH, ri++));
   if (sim) {
-    rows.push(SEP_5);
-    rows.push(['模擬種子', '', dash, sim.seed ?? 'random', '']);
-    rows.push(['模擬耗時', '', dash, `${(sim.elapsedMs / 1000).toFixed(1)}s`, '']);
-    rows.push(['模擬效能', '', dash, `${sim.roundsPerSec.toFixed(0)} 局/s`, '']);
+    push(statRow('模擬種子', DASH, String(sim.seed ?? 'random'), ri++));
+    push(statRow('模擬耗時', DASH, `${(sim.elapsedMs / 1000).toFixed(1)}s`, ri++));
+    push(statRow('模擬效能', DASH, `${sim.roundsPerSec.toFixed(0)} 局/s`, ri++));
   }
+  push('</table><br>');
 
-  rows.push([]);
-
-  // ═══ 各模式占比 ═══
+  // ═══ Win Distribution ═══
   if (config.math.winDistribution?.length) {
-    rows.push(['【 各模式占比 】', '', '', '', '']);
-    rows.push(SEP_5);
-    rows.push(['名稱', '分組', '區間下限', '區間上限', '占比%']);
-    rows.push(SEP_5);
-    for (const t of config.math.winDistribution) {
-      rows.push([t.label, t.group, t.min, t.max ?? '∞', `${t.percent}%`]);
-    }
-    rows.push([]);
+    push('<table>');
+    push(sectionHeader('各模式占比', 5));
+    push(`<tr>${th('名稱')}${th('分組')}${th('區間下限')}${th('區間上限')}${th('占比%')}</tr>`);
+    config.math.winDistribution.forEach((t, i) => {
+      const bg = i % 2 === 0 ? S.rowEven : S.rowOdd;
+      push(`<tr>${td(t.label, { bg, bold: true, align: 'left' })}${td(t.group, { bg })}${td(t.min, { bg })}${td(t.max ?? '∞', { bg })}${td(`${t.percent}%`, { bg })}</tr>`);
+    });
+    push('</table><br>');
   }
 
-  // ═══ 圖示賠率 ═══
-  rows.push(['【 圖示賠率 】']);
+  // ═══ Symbol Payouts ═══
   const ranges = config.pay.payRanges;
   const maxPay = Math.max(0, ...config.symbols.map((s) => s.payout.length));
   const payCols = Array.from({ length: maxPay }, (_, i) => {
@@ -114,60 +153,72 @@ export function buildConfigCsv(
   }
   const modeList = [...allModes].sort();
   const modeHeaders = modeList.flatMap((m) => [`${m} 權重`, `${m} 堆疊`]);
-  const symHeader = ['ID', '名稱', '類型', 'NG 權重', 'NG 堆疊', ...modeHeaders, ...payCols, '屬性'];
-  const symSep = symHeader.map(() => '════════════');
-  rows.push(symSep);
-  rows.push(symHeader);
-  rows.push(symSep);
-  for (const s of config.symbols) {
-    const pays = Array.from({ length: maxPay }, (_, i) => s.payout[i] ?? '');
+  const symHeaders = ['ID', '名稱', '類型', 'NG 權重', 'NG 堆疊', ...modeHeaders, ...payCols, '屬性'];
+  const symColSpan = symHeaders.length;
+
+  push('<table>');
+  push(sectionHeader('圖示賠率', symColSpan));
+  push(`<tr>${symHeaders.map(h => th(h)).join('')}</tr>`);
+  config.symbols.forEach((s, i) => {
+    const bg = i % 2 === 0 ? S.rowEven : S.rowOdd;
+    const pays = Array.from({ length: maxPay }, (_, j) => s.payout[j] ?? '');
     const modeCols = modeList.flatMap((m) => {
       const e = s.modeWeights?.[m];
-      return [e?.weight ?? '', e?.stackWeight ?? ''];
+      return [String(e?.weight ?? ''), String(e?.stackWeight ?? '')];
     });
-    rows.push([s.id, s.name, s.type.join('|'), s.weight, s.stackWeight ?? '', ...modeCols, ...pays, (s.properties ?? []).join('|')]);
-  }
-  rows.push([]);
+    const cells = [s.id, s.name, s.type.join('|'), String(s.weight), String(s.stackWeight ?? ''), ...modeCols, ...pays.map(String), (s.properties ?? []).join('|')];
+    push(`<tr>${cells.map((c, ci) => td(c, { bg, align: ci <= 1 ? 'left' : 'center' })).join('')}</tr>`);
+  });
+  push('</table><br>');
 
-  // ═══ 遊戲機制（觸發+功能合併） ═══
+  // ═══ Game Mechanics ═══
   if (config.triggers.length > 0 || config.features.length > 0) {
-    rows.push(['【 遊戲機制 】']);
-    rows.push(SEP_4);
+    push('<table>');
+    push(sectionHeader('遊戲機制', 4));
 
     if (config.triggers.length > 0) {
-      rows.push(['觸發 ID', '名稱', '目標功能', '條件']);
-      rows.push(SEP_4);
-      for (const t of config.triggers) {
-        const conds = (t.rule.conditions ?? [])
-          .map((c) => `${c.symbolId ?? c.metric} ${c.comparator} ${c.value}`)
-          .join(' & ');
-        rows.push([t.id, t.name, t.target, `[${t.rule.logic}] ${conds}`]);
-      }
-      rows.push([]);
+      push(`<tr>${th('觸發 ID')}${th('名稱')}${th('目標功能')}${th('條件')}</tr>`);
+      config.triggers.forEach((t, i) => {
+        const bg = i % 2 === 0 ? S.rowEven : S.rowOdd;
+        const conds = (t.rule.conditions ?? []).map((c) => `${c.symbolId ?? c.metric} ${c.comparator} ${c.value}`).join(' & ');
+        push(`<tr>${td(t.id, { bg, align: 'left' })}${td(t.name, { bg, align: 'left' })}${td(t.target, { bg })}${td(`[${t.rule.logic}] ${conds}`, { bg, align: 'left' })}</tr>`);
+      });
     }
 
     if (config.features.length > 0) {
-      rows.push(['功能 ID', '類型', '啟用', '參數']);
-      rows.push(SEP_4);
-      for (const f of config.features) rows.push([f.id, f.type, f.enabled ? '是' : '否', JSON.stringify(f.params)]);
-      rows.push([]);
+      if (config.triggers.length > 0) push(`<tr><td colspan="4" style="height:6px;"></td></tr>`);
+      push(`<tr>${th('功能 ID')}${th('類型')}${th('啟用')}${th('參數')}</tr>`);
+      config.features.forEach((f, i) => {
+        const bg = i % 2 === 0 ? S.rowEven : S.rowOdd;
+        push(`<tr>${td(f.id, { bg, align: 'left' })}${td(f.type, { bg })}${td(f.enabled ? '是' : '否', { bg, color: f.enabled ? S.ok : S.bad })}${td(JSON.stringify(f.params), { bg, align: 'left' })}</tr>`);
+      });
     }
+    push('</table><br>');
   }
 
-  // ═══ 動畫節奏 ═══
-  rows.push(['【 動畫節奏 】']);
-  rows.push(['', '一般 (s)', '極速 (s)']);
-  rows.push(['動畫類型', config.animation.type, config.animation.type]);
-  rows.push(['旋轉時間', (config.animation.normal.totalSpinTime / 1000).toFixed(2), (config.animation.turbo.totalSpinTime / 1000).toFixed(2)]);
-  rows.push(['停止間隔', (config.animation.normal.stopInterval / 1000).toFixed(2), (config.animation.turbo.stopInterval / 1000).toFixed(2)]);
-  rows.push(['回彈時間', (config.animation.normal.bounceDuration / 1000).toFixed(2), (config.animation.turbo.bounceDuration / 1000).toFixed(2)]);
+  // ═══ Animation ═══
+  push('<table>');
+  push(sectionHeader('動畫節奏', 3));
+  push(`<tr>${th('')}${th('一般 (s)')}${th('極速 (s)')}</tr>`);
+  const animRows: [string, string, string][] = [
+    ['動畫類型', config.animation.type, config.animation.type],
+    ['旋轉時間', (config.animation.normal.totalSpinTime / 1000).toFixed(2), (config.animation.turbo.totalSpinTime / 1000).toFixed(2)],
+    ['停止間隔', (config.animation.normal.stopInterval / 1000).toFixed(2), (config.animation.turbo.stopInterval / 1000).toFixed(2)],
+    ['回彈時間', (config.animation.normal.bounceDuration / 1000).toFixed(2), (config.animation.turbo.bounceDuration / 1000).toFixed(2)],
+  ];
+  animRows.forEach(([label, n, t], i) => {
+    const bg = i % 2 === 0 ? S.rowEven : S.rowOdd;
+    push(`<tr>${td(label, { bg, bold: true, align: 'left' })}${td(n, { bg })}${td(t, { bg })}</tr>`);
+  });
+  push('</table>');
 
-  return rowsToCsv(rows);
+  push('</body></html>');
+  return lines.join('\n');
 }
 
-/** Trigger a browser download of CSV text (UTF-8 BOM for Excel CJK support). */
-export function downloadCsv(filename: string, csv: string): void {
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+/** Download an HTML-table file as .xls (Excel opens it with formatting). */
+export function downloadCsv(filename: string, content: string): void {
+  const blob = new Blob([content], { type: 'application/vnd.ms-excel;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

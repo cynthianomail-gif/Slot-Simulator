@@ -80,17 +80,21 @@ export class StatisticsEngine {
     this.totalWin += round.totalWin;
     this.totalSpins += round.spins.length;
 
+    const naturalTotal = round.spins.reduce((a, s) => a + s.spinWin, 0);
+    const winScale = naturalTotal > 0 ? round.totalWin / naturalTotal : 1;
+
     for (const s of round.spins) {
-      if (s.spinWin > 0) this.winningSpins++;
+      const adjustedWin = s.spinWin * winScale;
+      if (adjustedWin > 0) this.winningSpins++;
 
       // per-mode accumulation
       const mode = spinKindToMode(s.kind);
       let m = this.modes.get(mode);
       if (!m) { m = { totalSpins: 0, winningSpins: 0, totalWinX: 0 }; this.modes.set(mode, m); }
       m.totalSpins++;
-      if (s.spinWin > 0) {
+      if (adjustedWin > 0) {
         m.winningSpins++;
-        m.totalWinX += round.bet > 0 ? s.spinWin / round.bet : 0;
+        m.totalWinX += round.bet > 0 ? adjustedWin / round.bet : 0;
       }
     }
 
