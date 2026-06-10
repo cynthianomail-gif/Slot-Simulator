@@ -4,14 +4,16 @@ import type { IRng } from './rng';
 /**
  * Win-distribution tracker.
  *
- * After each round the engine calls `adjust()` to:
- *  1. Decide which tier this round *should* fall into (deficit-weighted).
- *  2. If the natural result already matches → keep it.
- *  3. Otherwise → scale totalWin into the target tier's range.
- *  4. Position within that range is biased by cumulative RTP error so the
- *     long-run return converges toward the target.
+ * RTP is the **hard** constraint; tier percentages are best-effort.
  *
- * RTP is the hard constraint; distribution percentages are best-effort.
+ * Algorithm per round:
+ *  1. Pick target tier (deficit-weighted random).
+ *  2. Compute the ideal winX that makes cumulative RTP converge to target:
+ *       idealWin = targetRTP × (totalBet + bet) − totalWin
+ *       idealWinX = idealWin / bet
+ *  3. Add a small random jitter for variance.
+ *  4. Clamp the result into the target tier's [min, max] range.
+ *  5. If clamping pushes RTP away from target, subsequent rounds compensate.
  */
 export class WinDistTracker {
   private tierCounts: number[];
@@ -34,8 +36,8 @@ export class WinDistTracker {
   }
 
   /**
-   * Adjust a round's total win to match the distribution + RTP targets.
-   * @returns the (possibly scaled) totalWin.
+   * Adjust a round's total win.
+   * @returns the adjusted totalWin (always ≥ 0).
    */
   adjust(
     naturalTotalWin: number,
@@ -47,56 +49,39 @@ export class WinDistTracker {
       return naturalTotalWin;
     }
 
-    const winX = naturalTotalWin / bet;
     const group = isFeatureRound ? 'FG' : 'NG';
-
-    const naturalIdx = this.findTier(winX, group);
     const targetIdx = this.pickTargetTier(group, rng);
 
     if (targetIdx < 0) {
-      // No tiers for this group — pass through
-      this.book(naturalIdx, bet, naturalTotalWin);
+      // No tiers defined for this group — pass through natural result
+      this.book(-1, bet, naturalTotalWin);
       return naturalTotalWin;
     }
 
-    if (naturalIdx === targetIdx) {
-      // Already in the right tier — keep natural result
-      this.book(targetIdx, bet, naturalTotalWin);
-      return naturalTotalWin;
-    }
-
-    // Scale win into the target tier's range, RTP-aware
     const t = this.tiers[targetIdx];
     const lo = t.min;
     const hi = t.max ?? this.unboundedCap(t);
 
-    // RTP bias: how far off are we from targetRTP?
-    const actualRTP = this.totalBet > 0 ? this.totalWin / this.totalBet : this.targetRTP;
-    const rtpError = this.targetRTP - actualRTP; // >0 → need more win, <0 → need less
+    // --- RTP-first: compute the ideal winX to converge RTP ---
+    const newTotalBet = this.totalBet + bet;
+    const idealWin = this.targetRTP * newTotalBet - this.totalWin;
+    let idealX = idealWin / bet;
 
-    // Map rtpError to a 0..1 bias (0.5 = center of range)
-    const bias = clamp(0.5 + rtpError * 5, 0.05, 0.95);
-
-    // Deterministic position within the range
+    // Add jitter so results aren't perfectly smooth (±15% of tier spread)
     const spread = hi - lo;
-    const scaledX = lo + bias * spread + (rng.next() - 0.5) * spread * 0.1;
-    const clampedX = clamp(scaledX, lo, hi);
-    const scaledWin = clampedX * bet;
+    idealX += (rng.next() - 0.5) * spread * 0.3;
 
-    this.book(targetIdx, bet, scaledWin);
-    return scaledWin;
+    // Clamp into the tier's range (this is the distribution constraint)
+    const clampedX = clamp(idealX, lo, hi);
+
+    // Final win can't be negative
+    const adjustedWin = Math.max(0, clampedX * bet);
+
+    this.book(targetIdx, bet, adjustedWin);
+    return adjustedWin;
   }
 
   /* ------------------------------------------------------------------ */
-
-  private findTier(winX: number, group: string): number {
-    for (let i = 0; i < this.tiers.length; i++) {
-      const t = this.tiers[i];
-      if (t.group !== group) continue;
-      if (winX >= t.min && (t.max === null || winX <= t.max)) return i;
-    }
-    return -1;
-  }
 
   private pickTargetTier(group: string, rng: IRng): number {
     const cands: { idx: number; deficit: number }[] = [];
@@ -135,8 +120,9 @@ export class WinDistTracker {
   }
 
   private unboundedCap(t: WinTier): number {
-    // Sensible upper bound for unbounded tiers (32+, 600+, …)
-    return Math.max(t.min * 3, t.min + 200);
+    // For unbounded tiers (32+, 600+), use a sensible upper bound
+    // that won't blow up RTP when clamped.
+    return Math.max(t.min * 2, t.min + 50);
   }
 }
 
