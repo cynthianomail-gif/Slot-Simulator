@@ -5,14 +5,23 @@ import type { IRng } from './rng';
  * Win-distribution engine — 產牌→取牌→挑戰.
  *
  * Only activates when the board has a natural win (盤面有贏分).
- * Challenge probability is adjusted by the tracked natural hit rate
- * so that E[payout] = targetRTP × bet regardless of the game's
- * natural win frequency.
+ * The payout is adjusted by the tracked natural hit rate so that
+ * E[payout] = targetRTP × bet regardless of the game's natural
+ * win frequency.
  *
- * Math:
- *   E[payout] = hitRate × avgM × challengeProb × bet
- *   challengeProb = targetRTP / (hitRate × avgM)
- *   ∴ E[payout] = targetRTP × bet  ✓
+ * For each tier with average multiplier avgM:
+ *   ratio = targetRTP / (hitRate × avgM)
+ *
+ *   ratio < 1 (high multiplier tier):
+ *     Challenge — win with probability ratio → pay M × bet
+ *     E = avgM × ratio = targetRTP / hitRate  ✓
+ *
+ *   ratio ≥ 1 (low multiplier tier):
+ *     Always pay, boost payout → pay M × ratio × bet
+ *     E = avgM × ratio = targetRTP / hitRate  ✓
+ *
+ * Overall: E[payout] = hitRate × (targetRTP / hitRate) × bet
+ *        = targetRTP × bet  ✓
  */
 export class WinDistTracker {
   private totalRounds = 0;
@@ -46,7 +55,6 @@ export class WinDistTracker {
     this.totalRounds++;
     if (naturalTotalWin > 0) this.winningRounds++;
 
-    // Board has no wins → payout = 0 (visual matches score)
     if (naturalTotalWin <= 0) return 0;
 
     const group = isFeatureRound ? 'FG' : 'NG';
@@ -62,14 +70,20 @@ export class WinDistTracker {
     // Step 2: draw multiplier from tier range
     const M = lo + rng.next() * (hi - lo);
 
-    // Step 3: challenge — probability compensates for non-winning rounds
+    // Step 3: challenge or boost — ratio locks RTP
     const avgM = (lo + hi) / 2;
     if (avgM <= 0) return 0;
 
     const hr = this.hitRate;
-    const challengeProb = hr > 0 ? Math.min(1, this.targetRTP / (hr * avgM)) : 0;
+    if (hr <= 0) return 0;
+    const ratio = this.targetRTP / (hr * avgM);
 
-    if (rng.next() < challengeProb) {
+    if (ratio >= 1) {
+      // Low-multiplier tier: always pay, boost to compensate
+      return M * ratio * bet;
+    }
+    // High-multiplier tier: challenge
+    if (rng.next() < ratio) {
       return M * bet;
     }
     return 0;
