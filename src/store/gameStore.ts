@@ -552,23 +552,40 @@ export const useGameStore = create<GameStore>((set, get) => {
     const next = clone(prev);
     mutator(next);
 
-    // When the pay range changes, resize every symbol's payout array so it
-    // always has exactly (maxMatch - minMatch + 1) entries.
-    const prevMin = prev.pay.minMatch;
-    const prevMax = prev.pay.maxMatch ?? prevMin + Math.max(0, ...prev.symbols.map((s) => s.payout.length)) - 1;
-    const nextMin = next.pay.minMatch;
-    const nextMax = next.pay.maxMatch ?? nextMin + Math.max(0, ...next.symbols.map((s) => s.payout.length)) - 1;
-    if (nextMin !== prevMin || nextMax !== prevMax) {
-      // Clamp: maxMatch must be >= minMatch
-      if (nextMax < nextMin) next.pay.maxMatch = nextMin;
-      const newLen = (next.pay.maxMatch ?? nextMax) - nextMin + 1;
+    // When pay range/ranges change, resize every symbol's payout array.
+    const prevRanges = prev.pay.payRanges;
+    const nextRanges = next.pay.payRanges;
+    const prevSlots = prevRanges?.length
+      ?? (prev.pay.maxMatch ?? prev.pay.minMatch + Math.max(0, ...prev.symbols.map((s) => s.payout.length)) - 1) - prev.pay.minMatch + 1;
+    const nextSlots = nextRanges?.length
+      ?? (next.pay.maxMatch ?? next.pay.minMatch + Math.max(0, ...next.symbols.map((s) => s.payout.length)) - 1) - next.pay.minMatch + 1;
+
+    const rangesChanged = nextRanges && (!prevRanges || JSON.stringify(prevRanges) !== JSON.stringify(nextRanges));
+    const linearChanged = !nextRanges && (next.pay.minMatch !== prev.pay.minMatch || nextSlots !== prevSlots);
+
+    if (rangesChanged) {
+      for (const sym of next.symbols) {
+        const old = sym.payout;
+        const arr = new Array<number>(nextRanges.length).fill(0);
+        if (prevRanges) {
+          for (let k = 0; k < old.length && k < prevRanges.length; k++) {
+            const ni = nextRanges.findIndex((r) => r[0] === prevRanges[k][0] && r[1] === prevRanges[k][1]);
+            if (ni >= 0) arr[ni] = old[k];
+          }
+        }
+        sym.payout = arr;
+      }
+    } else if (linearChanged) {
+      const prevMin = prev.pay.minMatch;
+      const nextMin = next.pay.minMatch;
+      if (nextSlots < 1) next.pay.maxMatch = nextMin;
+      const newLen = nextSlots > 0 ? nextSlots : 1;
       for (const sym of next.symbols) {
         const old = sym.payout;
         const arr = new Array<number>(newLen).fill(0);
-        // copy old values aligned by their absolute match-count
         for (let k = 0; k < old.length; k++) {
-          const absCount = prevMin + k; // absolute match count this entry was for
-          const j = absCount - nextMin; // new index
+          const absCount = prevMin + k;
+          const j = absCount - nextMin;
           if (j >= 0 && j < newLen) arr[j] = old[k];
         }
         sym.payout = arr;

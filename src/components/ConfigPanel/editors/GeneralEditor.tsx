@@ -84,20 +84,20 @@ export function GeneralEditor() {
         </Field>
 
         {mode === 'cluster' ? (
-          <>
-            <NumField
-              label="群集最小數"
-              hint="相連的同符號至少幾個開始賠付"
-              value={config.pay.clusterMin ?? config.pay.minMatch}
-              onChange={(v) => update((c) => { c.pay.clusterMin = v; c.pay.minMatch = v; })}
+          <Field label="賠率區間" hint="每個區間用逗號分隔，範圍用 ~ 連接（例 5, 6~7, 8~9, 10~12）">
+            <Input
+              defaultValue={formatRanges(config.pay.payRanges ?? defaultClusterRanges(config.pay.clusterMin ?? config.pay.minMatch))}
+              onBlur={(e) => update((c) => {
+                const ranges = parseRanges(e.target.value);
+                if (ranges.length) {
+                  c.pay.payRanges = ranges;
+                  c.pay.clusterMin = ranges[0][0];
+                  c.pay.minMatch = ranges[0][0];
+                  c.pay.maxMatch = ranges[ranges.length - 1][1];
+                }
+              })}
             />
-            <NumField
-              label="群集最大數"
-              hint="賠率表的最高顆數上限"
-              value={config.pay.maxMatch ?? (config.pay.clusterMin ?? config.pay.minMatch) + 4}
-              onChange={(v) => update((c) => { c.pay.maxMatch = v; })}
-            />
-          </>
+          </Field>
         ) : (
           <>
             <NumField
@@ -343,6 +343,34 @@ function PaylineEditor() {
 }
 
 /* --------------------------------- helpers --------------------------------- */
+
+function parseRanges(text: string): [number, number][] {
+  return text
+    .split(/[,，]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => {
+      const m = s.match(/^(\d+)\s*[~～\-]\s*(\d+)$/);
+      if (m) {
+        const a = parseInt(m[1]), b = parseInt(m[2]);
+        return [Math.min(a, b), Math.max(a, b)] as [number, number];
+      }
+      const n = parseInt(s);
+      return isNaN(n) ? null : [n, n] as [number, number];
+    })
+    .filter((r): r is [number, number] => r !== null)
+    .sort((a, b) => a[0] - b[0]);
+}
+
+function formatRanges(ranges: [number, number][]): string {
+  return ranges.map(([a, b]) => a === b ? String(a) : `${a}~${b}`).join(', ');
+}
+
+function defaultClusterRanges(min: number): [number, number][] {
+  const ranges: [number, number][] = [];
+  for (let i = min; i <= min + 4; i++) ranges.push([i, i]);
+  return ranges;
+}
 
 export function Select({
   value,

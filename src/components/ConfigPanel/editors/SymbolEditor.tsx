@@ -12,9 +12,11 @@ export function SymbolEditor() {
   const pay = useGameStore((s) => s.config.pay);
   const update = useGameStore((s) => s.updateConfig);
 
+  const ranges = pay.payRanges;
+  const useRanges = pay.mode === 'cluster' && ranges && ranges.length > 0;
   const minMatch = pay.mode === 'cluster' ? (pay.clusterMin ?? pay.minMatch) : pay.minMatch;
   const maxMatch = pay.maxMatch ?? minMatch + Math.max(0, ...symbols.map((s) => s.payout.length)) - 1;
-  const paySlots = maxMatch - minMatch + 1;
+  const paySlots = useRanges ? ranges.length : maxMatch - minMatch + 1;
   const unit = pay.mode === 'cluster' ? '顆' : '連';
 
   const addSymbol = () =>
@@ -77,10 +79,12 @@ export function SymbolEditor() {
                 <div className="mb-1 text-[10px] font-medium text-muted-foreground">賠率</div>
                 <div className="flex gap-1.5">
                   {Array.from({ length: paySlots }, (_, k) => {
-                    const count = minMatch + k;
+                    const rangeLabel = useRanges
+                      ? (ranges[k][0] === ranges[k][1] ? `${ranges[k][0]}` : `${ranges[k][0]}~${ranges[k][1]}`)
+                      : `${minMatch + k}${unit}`;
                     return (
-                      <div key={count} className="flex-1 min-w-0">
-                        <div className="mb-0.5 text-center text-[9px] text-muted-foreground/70">{count}{unit}</div>
+                      <div key={k} className="flex-1 min-w-0">
+                        <div className="mb-0.5 text-center text-[9px] text-muted-foreground/70">{rangeLabel}</div>
                         <Input
                           className="h-7 px-1 text-center text-xs"
                           type="number"

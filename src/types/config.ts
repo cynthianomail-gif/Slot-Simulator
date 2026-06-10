@@ -126,6 +126,13 @@ export interface GameConfig {
      * If omitted, derived from the longest existing payout array.
      */
     maxMatch?: number;
+    /**
+     * Cluster-mode payout ranges. Each entry is [min, max] inclusive.
+     * e.g. [[5,5],[6,7],[8,9],[10,12],[13,14],[15,19],[20,24],[25,29],[30,34],[35,40],[41,44],[45,48],[49,49]]
+     * symbol.payout[k] maps to payRanges[k].
+     * When omitted, falls back to one-per-count (minMatch..maxMatch).
+     */
+    payRanges?: [number, number][];
     paylines?: PaylineDef[];
     /** Cluster minimum override (falls back to minMatch). */
     clusterMin?: number;

@@ -34,13 +34,29 @@ function payoutFor(
   if (!sym) return 0;
   const idx = count - minMatch;
   if (idx < 0 || idx >= sym.payout.length) {
-    // allow "count beyond table" to use the highest tier
     if (idx >= sym.payout.length && sym.payout.length > 0) {
       return sym.payout[sym.payout.length - 1];
     }
     return 0;
   }
   return sym.payout[idx];
+}
+
+function payoutForRanges(
+  sym: SymbolDefinition | undefined,
+  count: number,
+  ranges: [number, number][],
+): number {
+  if (!sym) return 0;
+  for (let k = 0; k < ranges.length; k++) {
+    if (count >= ranges[k][0] && count <= ranges[k][1]) {
+      return sym.payout[k] ?? 0;
+    }
+  }
+  if (ranges.length > 0 && count > ranges[ranges.length - 1][1] && sym.payout.length > 0) {
+    return sym.payout[sym.payout.length - 1];
+  }
+  return 0;
 }
 
 /** The set of payable base symbols a wild line can resolve to. */
@@ -192,7 +208,8 @@ function evalWays(config: GameConfig, grid: GridResult): WinLine[] {
 
 function evalCluster(config: GameConfig, grid: GridResult): WinLine[] {
   const idx = symbolIndex(config);
-  const minCluster = config.pay.clusterMin ?? config.pay.minMatch;
+  const ranges = config.pay.payRanges;
+  const minCluster = ranges ? ranges[0][0] : (config.pay.clusterMin ?? config.pay.minMatch);
   const wildCfg = config.wild;
   const wins: WinLine[] = [];
 
@@ -239,7 +256,9 @@ function evalCluster(config: GameConfig, grid: GridResult): WinLine[] {
       for (const c of group) visited.add(key(c));
 
       if (group.length >= minCluster) {
-        const basePay = payoutFor(startSym, group.length, minCluster);
+        const basePay = ranges
+          ? payoutForRanges(startSym, group.length, ranges)
+          : payoutFor(startSym, group.length, minCluster);
         if (basePay > 0) {
           wins.push({
             kind: 'cluster',
