@@ -14,6 +14,7 @@ import { evaluate } from './pay';
 import { evalTriggers, type TriggerContext } from './trigger';
 import { createFeature } from '@/features/registry';
 import type { FeatureRunContext } from '@/features/types';
+import { WinDistTracker } from './winDistribution';
 
 /** Options controlling a single round (also the cheat / buy injection surface). */
 export interface PlayOptions {
@@ -78,11 +79,17 @@ export class GameEngine {
   private bet = 0;
   private forcedStops: number[] | undefined;
   private forceSymbols: { id: string; count: number }[] | undefined;
+  private distTracker: WinDistTracker | null = null;
 
   constructor(config: GameConfig, rng: IRng, log: EventLog) {
     this.config = config;
     this.rng = rng;
     this.log = log;
+
+    const dist = config.math.winDistribution;
+    if (dist && dist.length > 0) {
+      this.distTracker = new WinDistTracker(dist, config.math.targetRTP);
+    }
   }
 
   private setState(s: GameState): void {
@@ -168,6 +175,9 @@ export class GameEngine {
     if (opts.forceMaxWinX && opts.forceMaxWinX > 0) {
       totalWin = opts.forceMaxWinX * this.bet;
       this.log.emit('CHEAT', { type: 'FORCE_MAX_WIN', x: opts.forceMaxWinX });
+    } else if (this.distTracker) {
+      const isFeature = triggeredFeatures.length > 0;
+      totalWin = this.distTracker.adjust(totalWin, this.bet, isFeature, this.rng);
     }
 
     this.setState('ROUND_END');

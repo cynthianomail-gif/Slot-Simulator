@@ -304,41 +304,37 @@ function TierRow({ tier, index, onChange }: {
   onChange: (i: number, key: 'min' | 'max' | 'percent' | 'label', v: number | string | null) => void;
 }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5">
       <Input
-        className="h-7 w-20 text-xs"
+        className="h-7 w-[4.5rem] shrink-0 text-[11px] px-1.5"
         defaultValue={tier.label}
         onBlur={(e) => onChange(index, 'label', e.target.value)}
       />
-      <div className="flex items-center gap-1">
-        <Input
-          className="h-7 w-14 px-1 text-center text-xs"
-          type="number"
-          defaultValue={tier.min}
-          onBlur={(e) => onChange(index, 'min', parseFloat(e.target.value) || 0)}
-        />
-        <span className="text-[10px] text-muted-foreground">~</span>
-        <Input
-          className="h-7 w-14 px-1 text-center text-xs"
-          type="text"
-          defaultValue={tier.max === null ? '' : tier.max}
-          placeholder="∞"
-          onBlur={(e) => {
-            const v = e.target.value.trim();
-            onChange(index, 'max', v === '' || v === '∞' ? null : parseFloat(v) || 0);
-          }}
-        />
-      </div>
-      <div className="flex items-center gap-1 ml-auto">
-        <Input
-          className="h-7 w-16 px-1 text-center text-xs"
-          type="number"
-          step={1}
-          defaultValue={tier.percent}
-          onBlur={(e) => onChange(index, 'percent', parseFloat(e.target.value) || 0)}
-        />
-        <span className="text-[10px] text-muted-foreground">%</span>
-      </div>
+      <Input
+        className="h-7 w-10 shrink-0 px-0.5 text-center text-[11px]"
+        type="number"
+        defaultValue={tier.min}
+        onBlur={(e) => onChange(index, 'min', parseFloat(e.target.value) || 0)}
+      />
+      <span className="text-[10px] text-muted-foreground shrink-0">~</span>
+      <Input
+        className="h-7 w-10 shrink-0 px-0.5 text-center text-[11px]"
+        type="text"
+        defaultValue={tier.max === null ? '∞' : tier.max}
+        placeholder="∞"
+        onBlur={(e) => {
+          const v = e.target.value.trim();
+          onChange(index, 'max', v === '' || v === '∞' ? null : parseFloat(v) || 0);
+        }}
+      />
+      <Input
+        className="h-7 w-12 shrink-0 px-0.5 text-center text-[11px] ml-auto"
+        type="number"
+        step={1}
+        defaultValue={tier.percent}
+        onBlur={(e) => onChange(index, 'percent', parseFloat(e.target.value) || 0)}
+      />
+      <span className="text-[10px] text-muted-foreground shrink-0">%</span>
     </div>
   );
 }
