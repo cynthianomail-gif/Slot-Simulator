@@ -2,74 +2,76 @@ import type { WinTier } from '@/types';
 import type { IRng } from './rng';
 
 /**
- * Win-distribution engine — two-phase: 產牌 (generate) → 取牌 (select).
+ * Win-distribution engine — 產牌→取牌→挑戰.
  *
- * The regular engine produces a board naturally (visuals).
- * This module overrides totalWin using:
+ * Only activates when the board has a natural win (盤面有贏分).
+ * Challenge probability is adjusted by the tracked natural hit rate
+ * so that E[payout] = targetRTP × bet regardless of the game's
+ * natural win frequency.
  *
- *   1. Pick a tier from the round's group (NG/FG) by percentage weight.
- *   2. Draw a multiplier M uniformly from the tier's [min, max] range.
- *   3. Challenge: win with probability  targetRTP / avgM  → payout = M × bet.
- *                 Lose (1 − p)                             → payout = 0.
- *
- * Math guarantee:
- *   E[payout | any tier] = avgM × (targetRTP / avgM) = targetRTP × bet
- *   ∴ E[payout] = targetRTP × bet regardless of tier distribution or NG/FG ratio.
- *
- * The tier selection controls the **variance shape** (hit rate vs. big-win frequency),
- * while RTP is locked by the challenge probability — no tracking or convergence needed.
+ * Math:
+ *   E[payout] = hitRate × avgM × challengeProb × bet
+ *   challengeProb = targetRTP / (hitRate × avgM)
+ *   ∴ E[payout] = targetRTP × bet  ✓
  */
 export class WinDistTracker {
+  private totalRounds = 0;
+  private winningRounds = 0;
+
   constructor(
     private tiers: WinTier[],
     private targetRTP: number,
   ) {}
 
   reset(): void {
-    // Stateless — nothing to reset.
+    this.totalRounds = 0;
+    this.winningRounds = 0;
   }
 
-  /**
-   * Replace a round's totalWin with a distribution-based result.
-   * @returns the adjusted totalWin (≥ 0).
-   */
+  private get hitRate(): number {
+    if (this.totalRounds < 20) return 1;
+    return this.winningRounds / this.totalRounds;
+  }
+
   adjust(
-    _naturalTotalWin: number,
+    naturalTotalWin: number,
     bet: number,
     isFeatureRound: boolean,
     rng: IRng,
   ): number {
     if (this.tiers.length === 0 || bet <= 0) {
-      return _naturalTotalWin;
+      return naturalTotalWin;
     }
 
-    // No visual win on the board → no payout (board must match display)
-    if (_naturalTotalWin <= 0) return 0;
+    this.totalRounds++;
+    if (naturalTotalWin > 0) this.winningRounds++;
+
+    // Board has no wins → payout = 0 (visual matches score)
+    if (naturalTotalWin <= 0) return 0;
 
     const group = isFeatureRound ? 'FG' : 'NG';
 
-    // --- Step 1: 取牌 — pick tier by percentage (normalized within group) ---
+    // Step 1: pick tier by percentage (normalized within group)
     const tierIdx = this.pickTierByPercent(group, rng);
-    if (tierIdx < 0) return _naturalTotalWin;
+    if (tierIdx < 0) return naturalTotalWin;
 
     const t = this.tiers[tierIdx];
     const lo = t.min;
     const hi = t.max ?? this.unboundedCap(t);
 
-    // --- Step 2: draw multiplier from tier range ---
+    // Step 2: draw multiplier from tier range
     const M = lo + rng.next() * (hi - lo);
 
-    // --- Step 3: challenge — probability locks RTP ---
+    // Step 3: challenge — probability compensates for non-winning rounds
     const avgM = (lo + hi) / 2;
     if (avgM <= 0) return 0;
 
-    const challengeProb = Math.min(1, this.targetRTP / avgM);
+    const hr = this.hitRate;
+    const challengeProb = hr > 0 ? Math.min(1, this.targetRTP / (hr * avgM)) : 0;
 
     if (rng.next() < challengeProb) {
-      // Challenge win → player gets M × bet
       return M * bet;
     }
-    // Challenge lose → 0
     return 0;
   }
 
