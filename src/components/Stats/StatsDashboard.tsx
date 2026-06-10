@@ -43,8 +43,7 @@ export function StatsDashboard() {
   const exportCsv = () => {
     const csv = buildConfigCsv(config, stats, simReport);
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-    const safe = config.meta.name.replace(/[^\w一-龥-]+/g, '_');
-    downloadCsv(`slot_${safe}_${stamp}.csv`, csv);
+    downloadCsv(`slot_模擬數據_${stamp}.csv`, csv);
   };
 
   const rtpDiff = stats.totalRounds > 0 ? Math.abs(stats.actualRTP - targetRTP) : 0;
