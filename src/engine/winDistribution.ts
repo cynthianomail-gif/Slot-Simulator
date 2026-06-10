@@ -2,40 +2,36 @@ import type { WinTier } from '@/types';
 import type { IRng } from './rng';
 
 /**
- * Win-distribution tracker — RTP is the HARD constraint.
+ * Win-distribution engine — two-phase: 產牌 (generate) → 取牌 (select).
  *
- * Per round:
- *  1. Compute idealX = the winX that makes cumulative RTP converge to target.
- *  2. From the matching group (NG/FG), collect only tiers whose min ≤ idealX
- *     (i.e. the budget can afford the tier's minimum payout).
- *  3. Among affordable tiers, pick one by deficit-weighted random.
- *  4. Clamp idealX into that tier's [min, max].
- *  5. Result: RTP stays locked near target; tier percentages converge as
- *     the budget naturally fluctuates.
+ * The regular engine produces a board naturally (visuals).
+ * This module overrides totalWin using:
+ *
+ *   1. Pick a tier from the round's group (NG/FG) by percentage weight.
+ *   2. Draw a multiplier M uniformly from the tier's [min, max] range.
+ *   3. Challenge: win with probability  targetRTP / avgM  → payout = M × bet.
+ *                 Lose (1 − p)                             → payout = 0.
+ *
+ * Math guarantee:
+ *   E[payout | any tier] = avgM × (targetRTP / avgM) = targetRTP × bet
+ *   ∴ E[payout] = targetRTP × bet regardless of tier distribution or NG/FG ratio.
+ *
+ * The tier selection controls the **variance shape** (hit rate vs. big-win frequency),
+ * while RTP is locked by the challenge probability — no tracking or convergence needed.
  */
 export class WinDistTracker {
-  private tierCounts: number[];
-  private totalRounds = 0;
-  private totalBet = 0;
-  private totalWin = 0;
-
   constructor(
     private tiers: WinTier[],
     private targetRTP: number,
-  ) {
-    this.tierCounts = new Array(tiers.length).fill(0);
-  }
+  ) {}
 
   reset(): void {
-    this.tierCounts.fill(0);
-    this.totalRounds = 0;
-    this.totalBet = 0;
-    this.totalWin = 0;
+    // Stateless — nothing to reset.
   }
 
   /**
-   * Adjust a round's total win.
-   * @returns the adjusted totalWin (always ≥ 0).
+   * Replace a round's totalWin with a distribution-based result.
+   * @returns the adjusted totalWin (≥ 0).
    */
   adjust(
     _naturalTotalWin: number,
@@ -49,94 +45,52 @@ export class WinDistTracker {
 
     const group = isFeatureRound ? 'FG' : 'NG';
 
-    // Step 1: compute the ideal winX to converge cumulative RTP → target
-    const newTotalBet = this.totalBet + bet;
-    const idealWin = this.targetRTP * newTotalBet - this.totalWin;
-    const idealX = Math.max(0, idealWin / bet);
+    // --- Step 1: 取牌 — pick tier by percentage (normalized within group) ---
+    const tierIdx = this.pickTierByPercent(group, rng);
+    if (tierIdx < 0) return _naturalTotalWin;
 
-    // Step 2: collect tiers in this group that the budget can afford
-    //         (idealX >= tier.min means we can pay at least the tier minimum)
-    const affordable: { idx: number; deficit: number }[] = [];
-    const allInGroup: { idx: number; deficit: number; min: number }[] = [];
-
-    for (let i = 0; i < this.tiers.length; i++) {
-      const t = this.tiers[i];
-      if (t.group !== group) continue;
-      const actual = this.totalRounds > 0
-        ? (this.tierCounts[i] / this.totalRounds) * 100
-        : 0;
-      const deficit = t.percent - actual;
-      allInGroup.push({ idx: i, deficit, min: t.min });
-      if (idealX >= t.min) {
-        affordable.push({ idx: i, deficit });
-      }
-    }
-
-    if (allInGroup.length === 0) {
-      // No tiers for this group
-      this.book(-1, bet, _naturalTotalWin);
-      return _naturalTotalWin;
-    }
-
-    // Step 3: pick from affordable tiers; fall back to cheapest tier
-    const pool = affordable.length > 0
-      ? affordable
-      : [allInGroup.reduce((a, b) => a.min < b.min ? a : b)];
-
-    const targetIdx = this.weightedPick(pool, rng);
-
-    // Step 4: clamp idealX into the tier's range
-    const t = this.tiers[targetIdx];
+    const t = this.tiers[tierIdx];
     const lo = t.min;
     const hi = t.max ?? this.unboundedCap(t);
 
-    // Small jitter for natural variance (±10% of tier spread, or ±0.2 for narrow tiers)
-    const spread = hi - lo;
-    const jitter = spread > 0.5
-      ? (rng.next() - 0.5) * spread * 0.2
-      : (rng.next() - 0.5) * 0.4;
+    // --- Step 2: draw multiplier from tier range ---
+    const M = lo + rng.next() * (hi - lo);
 
-    const clampedX = clamp(idealX + jitter, lo, hi);
-    const adjustedWin = Math.max(0, clampedX * bet);
+    // --- Step 3: challenge — probability locks RTP ---
+    const avgM = (lo + hi) / 2;
+    if (avgM <= 0) return 0;
 
-    this.book(targetIdx, bet, adjustedWin);
-    return adjustedWin;
+    const challengeProb = Math.min(1, this.targetRTP / avgM);
+
+    if (rng.next() < challengeProb) {
+      // Challenge win → player gets M × bet
+      return M * bet;
+    }
+    // Challenge lose → 0
+    return 0;
   }
 
   /* ------------------------------------------------------------------ */
 
-  private weightedPick(
-    cands: { idx: number; deficit: number }[],
-    rng: IRng,
-  ): number {
-    if (cands.length === 1) return cands[0].idx;
+  private pickTierByPercent(group: string, rng: IRng): number {
+    const cands: { idx: number; pct: number }[] = [];
+    for (let i = 0; i < this.tiers.length; i++) {
+      if (this.tiers[i].group === group) {
+        cands.push({ idx: i, pct: this.tiers[i].percent });
+      }
+    }
+    if (cands.length === 0) return -1;
 
-    const minDef = Math.min(...cands.map((c) => c.deficit));
-    const weights = cands.map((c) => Math.max(0.01, c.deficit - minDef + 1));
-    const totalW = weights.reduce((s, w) => s + w, 0);
-
-    let r = rng.next() * totalW;
-    for (let i = 0; i < cands.length; i++) {
-      r -= weights[i];
-      if (r <= 0) return cands[i].idx;
+    const totalPct = cands.reduce((s, c) => s + c.pct, 0);
+    let r = rng.next() * totalPct;
+    for (const c of cands) {
+      r -= c.pct;
+      if (r <= 0) return c.idx;
     }
     return cands[cands.length - 1].idx;
-  }
-
-  private book(tierIdx: number, bet: number, win: number): void {
-    this.totalRounds++;
-    this.totalBet += bet;
-    this.totalWin += win;
-    if (tierIdx >= 0 && tierIdx < this.tierCounts.length) {
-      this.tierCounts[tierIdx]++;
-    }
   }
 
   private unboundedCap(t: WinTier): number {
     return Math.max(t.min * 2, t.min + 50);
   }
-}
-
-function clamp(v: number, lo: number, hi: number): number {
-  return v < lo ? lo : v > hi ? hi : v;
 }
