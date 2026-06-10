@@ -7,16 +7,13 @@ export function DebugPanel() {
   const s = useGameStore();
 
   const rows: [string, React.ReactNode][] = [
-    ['目前狀態', <Badge variant="default">{s.state}</Badge>],
-    ['功能狀態', <Badge variant="accent">{s.featureState}</Badge>],
-    ['啟用功能', s.activeFeature ?? '—'],
+    ['強開功能', s.cheats.armedTriggers.length > 0 ? s.cheats.armedTriggers.join(', ') : '—'],
     ['滾輪停點', `[${s.reelStops.join(', ')}]`],
     ['亂數種子', s.useFixedSeed ? String(s.seed) : '隨機'],
     ['目前 RTP', pct(s.stats.actualRTP)],
     ['目前 BF', s.stats.actualBF > 0 ? `1/${s.stats.actualBF.toFixed(0)}` : '—'],
-    ['局編號', s.roundId],
-    ['盤編號', s.spinId],
-    ['補盤編號', s.cascadeId],
+    ['局數', s.roundId],
+    ['盤數', s.spinId],
   ];
 
   return (

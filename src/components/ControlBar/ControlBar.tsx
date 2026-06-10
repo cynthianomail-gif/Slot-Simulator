@@ -119,7 +119,7 @@ export function ControlBar() {
 
       {(s.cheats.armedTriggers.length > 0 || s.cheats.forceMaxWin) && (
         <Badge variant="accent" className="absolute -top-5 right-4">
-          已裝填強開{s.cheats.armedTriggers.length > 0 ? `：${s.cheats.armedTriggers.join(', ')}` : ''}
+          強開中{s.cheats.armedTriggers.length > 0 ? `：${s.cheats.armedTriggers.join(', ')}` : ''}
           {s.cheats.forceMaxWin ? ' · 最大贏分' : ''}
         </Badge>
       )}

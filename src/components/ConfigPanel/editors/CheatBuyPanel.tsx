@@ -25,7 +25,7 @@ export function CheatBuyPanel() {
     <div className="space-y-4">
       <Section
         title="強開機制"
-        desc="裝填後下一旋轉強制轉出可觸發該機制的盤面"
+        desc="啟用後每次旋轉都會強制觸發該機制，點擊可切換開關"
         action={
           armed.length > 0 ? (
             <Button size="sm" variant="ghost" className="h-7 px-2" onClick={clearCheats}>清除</Button>
@@ -53,7 +53,7 @@ export function CheatBuyPanel() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium text-foreground">{t.name}</span>
-                  {on && <Badge variant="accent">已裝填</Badge>}
+                  {on && <Badge variant="accent">啟用中</Badge>}
                 </div>
                 <div className="text-[11px] text-muted-foreground">
                   {condText(t.id) && <span>{condText(t.id)} · </span>}

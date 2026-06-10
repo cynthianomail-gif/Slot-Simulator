@@ -407,7 +407,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       events: [...log.list()].slice(-400),
       stats: snap,
       rtpHistory,
-      cheats: { ...st.cheats, armedTriggers: [], forceMaxWin: false },
+      cheats: { ...st.cheats, forceMaxWin: false },
     });
 
     pendingRound = round;
