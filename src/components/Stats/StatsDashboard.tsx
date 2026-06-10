@@ -36,8 +36,9 @@ export function StatsDashboard() {
 
   const [simRounds, setSimRounds] = useState(50_000);
 
-  const chartData = rtpHistory.map((d) => ({ x: d.round, rtp: d.rtp * 100 }));
-  const simChartData = simRtpHistory.map((d) => ({ x: d.round, rtp: d.rtp * 100 }));
+  // When a simulation has run, show its RTP curve in the main chart
+  const activeHistory = simRtpHistory.length > 0 ? simRtpHistory : rtpHistory;
+  const chartData = activeHistory.map((d) => ({ x: d.round, rtp: d.rtp * 100 }));
 
   const exportCsv = () => {
     const csv = buildConfigCsv(config, stats, simReport);
@@ -169,24 +170,6 @@ export function StatsDashboard() {
           {simRunning && (
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
               <div className="h-full bg-primary transition-all" style={{ width: `${simProgress * 100}%` }} />
-            </div>
-          )}
-          {(simRunning || simReport) && simRtpHistory.length > 1 && (
-            <div className="h-28 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={simChartData} margin={{ top: 4, right: 8, bottom: 0, left: -18 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="x" tick={{ fontSize: 9 }} stroke="hsl(var(--muted-foreground))" />
-                  <YAxis tick={{ fontSize: 9 }} stroke="hsl(var(--muted-foreground))" domain={['auto', 'auto']} />
-                  <Tooltip
-                    contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', fontSize: 11 }}
-                    formatter={(v: number) => [`${v.toFixed(2)}%`, 'RTP']}
-                    labelFormatter={(l) => `${fmtInt(Number(l))} 局`}
-                  />
-                  <ReferenceLine y={targetRTP * 100} stroke="hsl(var(--accent))" strokeDasharray="4 4" />
-                  <Line type="monotone" dataKey="rtp" stroke="hsl(var(--primary))" dot={false} strokeWidth={2} isAnimationActive={false} />
-                </LineChart>
-              </ResponsiveContainer>
             </div>
           )}
           {simReport && !simRunning && (
