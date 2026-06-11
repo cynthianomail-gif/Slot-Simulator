@@ -99,10 +99,10 @@ export function StatsDashboard() {
         {/* Per-mode stats (得分率 / 平均得分倍 / 場次與保底) */}
         {(mathTargets.length > 0 || Object.keys(stats.modeStats).length > 0) && (
           <div className="space-y-1">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">各模式得分率 / 平均得分倍 / 場次</div>
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">各模式得分率 / 平均得分倍 / 局次</div>
             <div className="divide-y divide-border rounded-md border border-border text-[11px]">
               <div className="grid grid-cols-[2.6rem_1fr_1fr_1fr_1fr] gap-1 bg-muted/30 px-2 py-1 font-semibold text-muted-foreground">
-                <span>模式</span><span>得分率</span><span>均倍</span><span>場均倍</span><span>最低場倍</span>
+                <span>模式</span><span>得分率</span><span>均倍</span><span>局均倍</span><span>最低局倍</span>
               </div>
               {[...new Set([...mathTargets.map((t) => t.mode), ...Object.keys(stats.modeStats)])].map((mode) => {
                 const t = mathTargets.find((x) => x.mode === mode);
@@ -123,7 +123,7 @@ export function StatsDashboard() {
                     <span className="tabular-nums">
                       {actual && actual.sessions > 0 ? `${fmt(actual.avgSessionX)}x` : '—'}
                       {actual && actual.sessions > 0 && (
-                        <span className="ml-1 text-muted-foreground">({fmtInt(actual.sessions)}場)</span>
+                        <span className="ml-1 text-muted-foreground">({fmtInt(actual.sessions)}局)</span>
                       )}
                     </span>
                     <span className={`tabular-nums ${floorOk ? '' : 'font-semibold text-red-500'}`}>

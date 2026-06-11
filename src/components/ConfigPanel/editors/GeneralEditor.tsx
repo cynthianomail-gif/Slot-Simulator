@@ -234,9 +234,7 @@ function MathTargetsEditor() {
       </div>
 
       <p className="text-[11px] leading-snug text-muted-foreground">
-        得分率 0~1（NG 為取牌嘗試率，經倍數挑戰後的實際得分率會略低）。
-        保底倍數：NG＝得分局最低倍數；FG / BG / 自訂＝每「場」功能遊戲的最低總倍數
-        （例：20 → 每次 FG 至少 20 倍）。自訂模式名稱需與功能的 kind 對應（大寫）。
+        得分率 0~1。保底：NG＝得分局最低倍；FG/BG/自訂＝每次功能的最低總倍（例 20 = 每局 FG 至少 20 倍）。自訂模式名需與 kind 對應（大寫）。
       </p>
     </div>
   );
@@ -295,7 +293,7 @@ function WinDistributionEditor() {
 
       {/* FG header */}
       <div className="flex items-center justify-between">
-        <div className="text-[11px] font-semibold text-muted-foreground">FG 功能遊戲（含 FG / BG / 自訂）— 每「場」總倍數區間占比</div>
+        <div className="text-[11px] font-semibold text-muted-foreground">FG 功能遊戲（含 FG / BG / 自訂）— 每局總倍數區間占比</div>
         <span className={`text-[11px] tabular-nums ${fgOk ? 'text-muted-foreground' : 'font-semibold text-red-500'}`}>
           小計 {fgTotal.toFixed(1)}%{fgOk ? '' : '（須為 100%）'}
         </span>
