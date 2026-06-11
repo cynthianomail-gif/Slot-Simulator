@@ -32,14 +32,15 @@ export const defaultConfig: GameConfig = {
       { mode: 'FG', hitRate: 0.45, avgWinX: 60, minWinX: 20 },
     ],
     winDistribution: [
-      { label: 'NG低倍', group: 'NG', min: 0, max: 2, percent: 20 },
-      { label: 'NG小倍', group: 'NG', min: 2, max: 8, percent: 10 },
-      { label: 'NG中倍', group: 'NG', min: 8, max: 32, percent: 5 },
-      { label: 'NG大倍', group: 'NG', min: 32, max: null, percent: 5 },
-      { label: 'FG小倍', group: 'FG', min: 0, max: 60, percent: 30 },
-      { label: 'FG中倍', group: 'FG', min: 60, max: 120, percent: 15 },
-      { label: 'FG大倍', group: 'FG', min: 120, max: 600, percent: 10 },
-      { label: 'FG超大倍', group: 'FG', min: 600, max: null, percent: 5 },
+      // 各組占比必須剛好合計 100
+      { label: 'NG低倍', group: 'NG', min: 0, max: 2, percent: 50 },
+      { label: 'NG小倍', group: 'NG', min: 2, max: 8, percent: 25 },
+      { label: 'NG中倍', group: 'NG', min: 8, max: 32, percent: 12.5 },
+      { label: 'NG大倍', group: 'NG', min: 32, max: null, percent: 12.5 },
+      { label: 'FG小倍', group: 'FG', min: 0, max: 60, percent: 50 },
+      { label: 'FG中倍', group: 'FG', min: 60, max: 120, percent: 25 },
+      { label: 'FG大倍', group: 'FG', min: 120, max: 600, percent: 16.7 },
+      { label: 'FG超大倍', group: 'FG', min: 600, max: null, percent: 8.3 },
     ],
   },
 

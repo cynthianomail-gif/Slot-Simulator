@@ -245,14 +245,14 @@ function MathTargetsEditor() {
 /* ----------------------------- win distribution ----------------------------- */
 
 const DEFAULT_WIN_DIST: WinTier[] = [
-  { label: 'NG低倍', group: 'NG', min: 0, max: 2, percent: 20 },
-  { label: 'NG小倍', group: 'NG', min: 2, max: 8, percent: 10 },
-  { label: 'NG中倍', group: 'NG', min: 8, max: 32, percent: 5 },
-  { label: 'NG大倍', group: 'NG', min: 32, max: null, percent: 5 },
-  { label: 'FG小倍', group: 'FG', min: 0, max: 60, percent: 30 },
-  { label: 'FG中倍', group: 'FG', min: 60, max: 120, percent: 15 },
-  { label: 'FG大倍', group: 'FG', min: 120, max: 600, percent: 10 },
-  { label: 'FG超大倍', group: 'FG', min: 600, max: null, percent: 5 },
+  { label: 'NG低倍', group: 'NG', min: 0, max: 2, percent: 50 },
+  { label: 'NG小倍', group: 'NG', min: 2, max: 8, percent: 25 },
+  { label: 'NG中倍', group: 'NG', min: 8, max: 32, percent: 12.5 },
+  { label: 'NG大倍', group: 'NG', min: 32, max: null, percent: 12.5 },
+  { label: 'FG小倍', group: 'FG', min: 0, max: 60, percent: 50 },
+  { label: 'FG中倍', group: 'FG', min: 60, max: 120, percent: 25 },
+  { label: 'FG大倍', group: 'FG', min: 120, max: 600, percent: 16.7 },
+  { label: 'FG超大倍', group: 'FG', min: 600, max: null, percent: 8.3 },
 ];
 
 function WinDistributionEditor() {
@@ -261,6 +261,8 @@ function WinDistributionEditor() {
   const tiers = config.math.winDistribution ?? DEFAULT_WIN_DIST;
   const ngTotal = tiers.filter((t) => t.group === 'NG').reduce((s, t) => s + t.percent, 0);
   const fgTotal = tiers.filter((t) => t.group === 'FG').reduce((s, t) => s + t.percent, 0);
+  const ngOk = Math.abs(ngTotal - 100) < 0.05;
+  const fgOk = Math.abs(fgTotal - 100) < 0.05;
 
   const setTierField = (i: number, key: 'min' | 'max' | 'percent' | 'label', v: number | string | null) =>
     update((c) => {
@@ -278,7 +280,9 @@ function WinDistributionEditor() {
       {/* NG header */}
       <div className="flex items-center justify-between">
         <div className="text-[11px] font-semibold text-muted-foreground">NG 一般遊戲 — 得分局的倍數區間占比</div>
-        <span className="text-[11px] tabular-nums text-muted-foreground">小計 {ngTotal.toFixed(1)}%</span>
+        <span className={`text-[11px] tabular-nums ${ngOk ? 'text-muted-foreground' : 'font-semibold text-red-500'}`}>
+          小計 {ngTotal.toFixed(1)}%{ngOk ? '' : '（須為 100%）'}
+        </span>
       </div>
       <div className="space-y-1.5">
         {tiers.map((t, i) => {
@@ -292,7 +296,9 @@ function WinDistributionEditor() {
       {/* FG header */}
       <div className="flex items-center justify-between">
         <div className="text-[11px] font-semibold text-muted-foreground">FG 功能遊戲（含 FG / BG / 自訂）— 每「場」總倍數區間占比</div>
-        <span className="text-[11px] tabular-nums text-muted-foreground">小計 {fgTotal.toFixed(1)}%</span>
+        <span className={`text-[11px] tabular-nums ${fgOk ? 'text-muted-foreground' : 'font-semibold text-red-500'}`}>
+          小計 {fgTotal.toFixed(1)}%{fgOk ? '' : '（須為 100%）'}
+        </span>
       </div>
       <div className="space-y-1.5">
         {tiers.map((t, i) => {
@@ -304,7 +310,7 @@ function WinDistributionEditor() {
       </div>
 
       <p className="text-[11px] leading-snug text-muted-foreground">
-        占比於各組內按相對權重正規化（不必剛好 100）。先以這些區間「產牌」建立牌庫，
+        各組占比必須剛好合計 100%（NG 一組、FG 一組各自為 100）。先以這些區間「產牌」建立牌庫，
         再依占比「取牌」；倍數挑戰勝率由目標 RTP 自動反解，詳見統計面板。
       </p>
     </div>

@@ -209,6 +209,14 @@ export class CardPool {
     const targets = config.math.targets ?? [];
     const targetOf = (mode: string) => targets.find((t) => t.mode === mode);
 
+    // 各組占比應剛好合計 100（取牌仍按相對權重運作，但設定面要求 100）
+    for (const group of ['NG', 'FG'] as const) {
+      const total = dist.filter((t) => t.group === group).reduce((s, t) => s + t.percent, 0);
+      if (total > 0 && Math.abs(total - 100) >= 0.05) {
+        notes.push(`${group} 占比合計 ${total.toFixed(1)}% ≠ 100% — 請調整為剛好 100`);
+      }
+    }
+
     /* ---------------- 產牌 phase 1: NG single-spin pool ---------------- */
 
     const boards: PoolBoard[] = [];
