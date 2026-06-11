@@ -78,14 +78,17 @@ export function GeneralEditor() {
         <Field label="連線方式">
           <Select
             value={mode}
-            options={['payline', 'ways', 'cluster']}
-            labels={{ payline: '線數 (payline)', ways: '路數 (ways)', cluster: '群集 (cluster)' }}
+            options={['payline', 'ways', 'cluster', 'anywhere']}
+            labels={{ payline: '線數 (payline)', ways: '路數 (ways)', cluster: '群集 (cluster)', anywhere: '任意 (anywhere)' }}
             onChange={(v) => update((c) => { c.pay.mode = v as PayMode; })}
           />
         </Field>
 
-        {mode === 'cluster' ? (
-          <Field label="賠率區間" hint="每個區間用逗號分隔，範圍用 ~ 連接（例 5, 6~7, 8~9, 10~12）">
+        {mode === 'cluster' || mode === 'anywhere' ? (
+          <Field
+            label="賠率區間"
+            hint={`每個區間用逗號分隔，範圍用 ~ 連接（例 5, 6~7, 8~9, 10~12）${mode === 'anywhere' ? '。任意位置同符號達區間數量即得分，不需相鄰' : ''}`}
+          >
             <Input
               defaultValue={formatRanges(config.pay.payRanges ?? defaultClusterRanges(config.pay.clusterMin ?? config.pay.minMatch))}
               onBlur={(e) => update((c) => {

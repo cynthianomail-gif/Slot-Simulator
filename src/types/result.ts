@@ -2,8 +2,8 @@ import type { GridResult, CellPos } from './grid';
 
 /** A single win line / way / cluster produced by the pay engine. */
 export interface WinLine {
-  /** 'payline' id, 'ways', or 'cluster'. */
-  kind: 'payline' | 'ways' | 'cluster';
+  /** 'payline' id, 'ways', 'cluster', or 'anywhere'. */
+  kind: 'payline' | 'ways' | 'cluster' | 'anywhere';
   symbolId: string;
   count: number;
   /** Base payout before line-level multiplier (in bet units * coin). */

@@ -13,11 +13,12 @@ export function SymbolEditor() {
   const update = useGameStore((s) => s.updateConfig);
 
   const ranges = pay.payRanges;
-  const useRanges = pay.mode === 'cluster' && ranges && ranges.length > 0;
-  const minMatch = pay.mode === 'cluster' ? (pay.clusterMin ?? pay.minMatch) : pay.minMatch;
+  const countMode = pay.mode === 'cluster' || pay.mode === 'anywhere';
+  const useRanges = countMode && ranges && ranges.length > 0;
+  const minMatch = countMode ? (pay.clusterMin ?? pay.minMatch) : pay.minMatch;
   const maxMatch = pay.maxMatch ?? minMatch + Math.max(0, ...symbols.map((s) => s.payout.length)) - 1;
   const paySlots = useRanges ? ranges.length : maxMatch - minMatch + 1;
-  const unit = pay.mode === 'cluster' ? '顆' : '連';
+  const unit = countMode ? '顆' : '連';
 
   const addSymbol = () =>
     update((c) => {

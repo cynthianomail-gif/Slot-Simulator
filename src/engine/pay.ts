@@ -16,10 +16,11 @@ import {
 } from './wild';
 
 /**
- * Pay engine. Supports three pay models driven entirely by GameConfig:
- *   - payline : fixed / custom lines, left-to-right.
- *   - ways    : adjacent-reel "ways" (243/1024/Megaways).
- *   - cluster : flood-filled connected groups of >= clusterMin.
+ * Pay engine. Supports four pay models driven entirely by GameConfig:
+ *   - payline  : fixed / custom lines, left-to-right.
+ *   - ways     : adjacent-reel "ways" (243/1024/Megaways).
+ *   - cluster  : flood-filled connected groups of >= clusterMin.
+ *   - anywhere : same symbol anywhere on the grid (no adjacency), >= min count.
  *
  * Returns an EvalResult with itemised win lines, total pay, and symbol counts.
  * Pay values are expressed in "bet-line units": the caller multiplies by the
@@ -276,6 +277,54 @@ function evalCluster(config: GameConfig, grid: GridResult): WinLine[] {
   return wins;
 }
 
+/* ------------------------------- Anywhere -------------------------------- */
+
+function evalAnywhere(config: GameConfig, grid: GridResult): WinLine[] {
+  const idx = symbolIndex(config);
+  const ranges = config.pay.payRanges;
+  const minCount = ranges ? ranges[0][0] : (config.pay.clusterMin ?? config.pay.minMatch);
+  const wildCfg = config.wild;
+  const wins: WinLine[] = [];
+
+  for (const base of config.symbols) {
+    if (!isPayableBase(base)) continue;
+    const baseId = base.id;
+
+    const cells: CellPos[] = [];
+    let lineMult = 1;
+    for (let col = 0; col < grid.cols; col++) {
+      const column = grid.columns[col] ?? [];
+      for (let row = 0; row < column.length; row++) {
+        const id = column[row];
+        const sym = idx.get(id);
+        const asWild = isWild(sym) && wildSubstitutes(wildCfg, baseId);
+        if (id === baseId || asWild) {
+          if (asWild) lineMult *= wildMultiplier(wildCfg);
+          cells.push({ col, row });
+        }
+      }
+    }
+
+    if (cells.length >= minCount) {
+      const basePay = ranges
+        ? payoutForRanges(base, cells.length, ranges)
+        : payoutFor(base, cells.length, minCount);
+      if (basePay > 0) {
+        wins.push({
+          kind: 'anywhere',
+          symbolId: baseId,
+          count: cells.length,
+          basePay,
+          multiplier: lineMult,
+          pay: basePay * lineMult,
+          cells,
+        });
+      }
+    }
+  }
+  return wins;
+}
+
 /* ------------------------------ Public API ------------------------------- */
 
 export function evaluate(config: GameConfig, grid: GridResult): EvalResult {
@@ -289,6 +338,9 @@ export function evaluate(config: GameConfig, grid: GridResult): EvalResult {
       break;
     case 'cluster':
       wins = evalCluster(config, grid);
+      break;
+    case 'anywhere':
+      wins = evalAnywhere(config, grid);
       break;
     default:
       wins = [];
