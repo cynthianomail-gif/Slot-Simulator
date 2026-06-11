@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Stat } from '@/components/ui/misc';
@@ -142,14 +142,16 @@ export function StatsDashboard() {
           <div className="space-y-1 rounded-md border border-border bg-muted/20 p-2">
             <div className="text-[10px] uppercase tracking-wide text-muted-foreground">牌庫取牌模型</div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]">
-              <span className="text-muted-foreground">倍數挑戰勝率</span>
-              <span className="tabular-nums font-semibold">{pct(poolInfo.challengeQ)}</span>
-              <span className="text-muted-foreground">解析期望 RTP</span>
-              <span className="tabular-nums">{pct(poolInfo.expectedRTP)}</span>
-              <span className="text-muted-foreground">NG 實際得分率（設定×挑戰）</span>
-              <span className="tabular-nums">{pct(poolInfo.observedHitRateNG)}</span>
               <span className="text-muted-foreground">牌庫自然得分率</span>
-              <span className="tabular-nums">{pct(poolInfo.naturalHitRate)}</span>
+              <span className="tabular-nums font-semibold">{pct(poolInfo.naturalHitRate)}</span>
+              <span className="text-muted-foreground">NG 得分率</span>
+              <span className="tabular-nums">{pct(poolInfo.observedHitRateNG)}</span>
+              {poolInfo.features.map((f) => (
+                <Fragment key={f.entryId}>
+                  <span className="text-muted-foreground">{f.mode} 得分率</span>
+                  <span className="tabular-nums">{pct(f.spinHitRate)}</span>
+                </Fragment>
+              ))}
               {poolInfo.boost !== 1 && (
                 <>
                   <span className="text-muted-foreground">全域加成</span>

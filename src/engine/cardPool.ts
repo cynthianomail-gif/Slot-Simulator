@@ -84,6 +84,7 @@ interface FeaturePool {
   zeroSpins: SpinResult[]; // individual zero-win spins of this kind
   tiers: SessionTierBucket[];
   meanDrawn: number; // Σ weight × mean
+  spinHitRate: number; // natural per-spin hit rate inside pooled sessions
 }
 
 /* ------------------------------- pool info ------------------------------- */
@@ -105,6 +106,8 @@ export interface PoolFeatureInfo {
   triggerRate: number;
   floor: number;
   sessionCount: number;
+  /** 牌庫場內每局的自然得分率。 */
+  spinHitRate: number;
   tiers: PoolTierStat[];
 }
 
@@ -326,6 +329,7 @@ export class CardPool {
         triggerRate: fp.triggerRate,
         floor: fp.floor,
         sessionCount: fp.all.length,
+        spinHitRate: fp.spinHitRate,
         tiers: fp.tiers.map((t) => tierStat(t.tier, t)),
       })),
       notes,
@@ -570,6 +574,8 @@ export class CardPool {
     const sessions: PoolSession[] = [];
     const zeroSpins: SpinResult[] = [];
     let spinBudget = SESSION_SPIN_BUDGET;
+    let spinTotal = 0;
+    let spinWinning = 0;
 
     for (let i = 0; i < SESSION_POOL_SIZE && spinBudget > 0; i++) {
       let used = 0;
@@ -579,8 +585,10 @@ export class CardPool {
         bet: 1,
         runSpin: (k: string) => {
           used++;
+          spinTotal++;
           const spin = runNaturalSpin(this.config, rng, k, 1);
-          if (spin.spinWin <= 0 && zeroSpins.length < 200) zeroSpins.push(spin);
+          if (spin.spinWin > 0) spinWinning++;
+          else if (zeroSpins.length < 200) zeroSpins.push(spin);
           return spin;
         },
         emit: () => {},
@@ -605,9 +613,6 @@ export class CardPool {
       const mean = synthetic
         ? Math.min(MAX_WIN_X, (effLo + effHi) / 2)
         : inTier.reduce((s, x) => s + x.totalX, 0) / inTier.length;
-      if (synthetic) {
-        notes.push(`${entry.id}（${mode}）區間「${tier.label}」無自然場 — 以縮放場合成`);
-      }
       totalPct += tier.percent;
       tiers.push({ tier, effLo, effHi, weight: tier.percent, mean, sessions: inTier, synthetic });
     }
@@ -616,7 +621,17 @@ export class CardPool {
 
     const meanDrawn = tiers.reduce((s, t) => s + t.weight * t.mean, 0);
 
-    return { entry, mode, floor, triggerRate, all: sessions, zeroSpins, tiers, meanDrawn };
+    return {
+      entry,
+      mode,
+      floor,
+      triggerRate,
+      all: sessions,
+      zeroSpins,
+      tiers,
+      meanDrawn,
+      spinHitRate: spinTotal > 0 ? spinWinning / spinTotal : 0,
+    };
   }
 }
 
