@@ -527,6 +527,9 @@ export const useGameStore = create<GameStore>((set, get) => {
     featureDone = 0;
     featureTotal = round.spins.filter((s) => s.kind !== 'normal').length;
 
+    const naturalTotal = round.spins.reduce((a, s) => a + s.spinWin, 0);
+    roundWinScale = naturalTotal > 0 ? round.totalWin / naturalTotal : 1;
+
     if (!st.animationEnabled) {
       const last = round.spins.at(-1);
       currentSpinFinalGrid = last?.gridSteps.at(-1) ?? last?.grid ?? finalGrid;

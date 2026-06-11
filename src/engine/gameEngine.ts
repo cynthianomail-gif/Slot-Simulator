@@ -114,12 +114,26 @@ export class GameEngine {
     const triggeredFeatures: string[] = [];
 
     // --- base spin ---
-    const base = this.runSpin('normal');
-    spins.push(base);
+    let base = this.runSpin('normal');
     this.forcedStops = undefined; // forced stops only apply to the base spin
     this.forceSymbols = undefined; // forced symbols only apply to the base spin
 
-    // --- trigger evaluation on the base spin's final grid ---
+    // --- distribution challenge (before triggers) ---
+    // The challenge decides whether a winning board is shown at all.
+    // If challenge fails → re-spin to get a non-winning board.
+    let distBaseWin: number | undefined;
+    const useCheatWin = opts.forceMaxWinX && opts.forceMaxWinX > 0;
+    if (this.distTracker && !useCheatWin) {
+      distBaseWin = this.distTracker.adjust(base.spinWin, this.bet, false, this.rng);
+      if (base.spinWin > 0 && distBaseWin <= 0) {
+        base = this.respinNoWin();
+        distBaseWin = 0;
+      }
+    }
+
+    spins.push(base);
+
+    // --- trigger evaluation on the (possibly replaced) base spin's final grid ---
     const finalGrid = lastGrid(base);
     const ctx = this.buildTriggerContext(finalGrid, base.spinWin);
     const fired = evalTriggers(this.config.triggers, ctx);
@@ -170,14 +184,16 @@ export class GameEngine {
     }
 
     // --- settle round ---
-    let totalWin = spins.reduce((a, s) => a + s.spinWin, 0);
+    let totalWin: number;
 
-    if (opts.forceMaxWinX && opts.forceMaxWinX > 0) {
-      totalWin = opts.forceMaxWinX * this.bet;
+    if (useCheatWin) {
+      totalWin = opts.forceMaxWinX! * this.bet;
       this.log.emit('CHEAT', { type: 'FORCE_MAX_WIN', x: opts.forceMaxWinX });
-    } else if (this.distTracker) {
-      const isFeature = triggeredFeatures.length > 0;
-      totalWin = this.distTracker.adjust(totalWin, this.bet, isFeature, this.rng);
+    } else if (distBaseWin !== undefined) {
+      const featureWin = spins.slice(1).reduce((a, s) => a + s.spinWin, 0);
+      totalWin = distBaseWin + featureWin;
+    } else {
+      totalWin = spins.reduce((a, s) => a + s.spinWin, 0);
     }
 
     // Hard cap: single round never exceeds 12000× bet
@@ -272,6 +288,47 @@ export class GameEngine {
       gridSteps,
       cascades,
       spinWin,
+      firedTriggers: [],
+    };
+  }
+
+  /**
+   * Re-spin reels (without logging) until the board has no natural wins.
+   * Used when the distribution challenge fails — the player should see a
+   * non-winning board instead of the original winning one.
+   */
+  private respinNoWin(): SpinResult {
+    for (let i = 0; i < 100; i++) {
+      const outcome = spinReels(this.config, this.rng, 'NG');
+      const grid = outcome.grid;
+      const res = evaluate(this.config, grid);
+      if (res.totalPay <= 0) {
+        this.lastReelStops = outcome.reelStops;
+        return {
+          spinId: this.log.spinId,
+          kind: 'normal',
+          reelStops: outcome.reelStops,
+          grid,
+          gridSteps: [grid],
+          cascades: [res],
+          spinWin: 0,
+          firedTriggers: [],
+        };
+      }
+    }
+    // Fallback: use last spin even if it has wins (very high hit rate config)
+    const outcome = spinReels(this.config, this.rng, 'NG');
+    const grid = outcome.grid;
+    const res = evaluate(this.config, grid);
+    this.lastReelStops = outcome.reelStops;
+    return {
+      spinId: this.log.spinId,
+      kind: 'normal',
+      reelStops: outcome.reelStops,
+      grid,
+      gridSteps: [grid],
+      cascades: [res],
+      spinWin: res.totalPay * this.bet,
       firedTriggers: [],
     };
   }
