@@ -12,4 +12,5 @@ export * from './simulation';
 export * from './cheats';
 export * from './buyFeature';
 export * from './animation';
-export * from './winDistribution';
+export * from './spinRunner';
+export * from './cardPool';

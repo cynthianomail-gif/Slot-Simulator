@@ -149,6 +149,7 @@ function MathTargetsEditor() {
       if (key === 'mode') t.mode = v as string;
       else if (key === 'hitRate') t.hitRate = v as number;
       else if (key === 'avgWinX') t.avgWinX = v as number;
+      else if (key === 'minWinX') t.minWinX = v as number;
     });
 
   // Preset modes not yet added
@@ -187,7 +188,7 @@ function MathTargetsEditor() {
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1">
                 <div className="text-[11px] text-muted-foreground">得分率</div>
                 <Input
@@ -204,6 +205,16 @@ function MathTargetsEditor() {
                   step={0.1}
                   value={t.avgWinX}
                   onChange={(e) => setField(i, 'avgWinX', parseFloat(e.target.value) || 0)}
+                />
+              </div>
+              <div className="space-y-1">
+                <div className="text-[11px] text-muted-foreground">保底倍數</div>
+                <Input
+                  type="number"
+                  step={1}
+                  min={0}
+                  value={t.minWinX ?? 0}
+                  onChange={(e) => setField(i, 'minWinX', parseFloat(e.target.value) || 0)}
                 />
               </div>
             </div>
@@ -223,7 +234,9 @@ function MathTargetsEditor() {
       </div>
 
       <p className="text-[11px] leading-snug text-muted-foreground">
-        得分率 0~1，平均得分倍＝得分局的平均贏分 ÷ 注額。
+        得分率 0~1（NG 為取牌嘗試率，經倍數挑戰後的實際得分率會略低）。
+        保底倍數：NG＝得分局最低倍數；FG / BG / 自訂＝每「場」功能遊戲的最低總倍數
+        （例：20 → 每次 FG 至少 20 倍）。自訂模式名稱需與功能的 kind 對應（大寫）。
       </p>
     </div>
   );
@@ -246,8 +259,8 @@ function WinDistributionEditor() {
   const config = useGameStore((s) => s.config);
   const update = useGameStore((s) => s.updateConfig);
   const tiers = config.math.winDistribution ?? DEFAULT_WIN_DIST;
-  const total = tiers.reduce((s, t) => s + t.percent, 0);
-  const isValid = Math.abs(total - 100) < 0.01;
+  const ngTotal = tiers.filter((t) => t.group === 'NG').reduce((s, t) => s + t.percent, 0);
+  const fgTotal = tiers.filter((t) => t.group === 'FG').reduce((s, t) => s + t.percent, 0);
 
   const setTierField = (i: number, key: 'min' | 'max' | 'percent' | 'label', v: number | string | null) =>
     update((c) => {
@@ -260,15 +273,13 @@ function WinDistributionEditor() {
 
   return (
     <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
-      <div className="flex items-center justify-between">
-        <div className="text-[13px] font-medium text-foreground">各模式占比</div>
-        <span className={`text-[11px] font-medium tabular-nums ${isValid ? 'text-muted-foreground' : 'text-red-500'}`}>
-          合計 {total.toFixed(1)}%{!isValid && ' ≠ 100%'}
-        </span>
-      </div>
+      <div className="text-[13px] font-medium text-foreground">各模式占比（取牌權重）</div>
 
       {/* NG header */}
-      <div className="text-[11px] font-semibold text-muted-foreground">NG 一般遊戲</div>
+      <div className="flex items-center justify-between">
+        <div className="text-[11px] font-semibold text-muted-foreground">NG 一般遊戲 — 得分局的倍數區間占比</div>
+        <span className="text-[11px] tabular-nums text-muted-foreground">小計 {ngTotal.toFixed(1)}%</span>
+      </div>
       <div className="space-y-1.5">
         {tiers.map((t, i) => {
           if (t.group !== 'NG') return null;
@@ -279,7 +290,10 @@ function WinDistributionEditor() {
       </div>
 
       {/* FG header */}
-      <div className="text-[11px] font-semibold text-muted-foreground">FG 功能遊戲（含 FG / BG / 其他）</div>
+      <div className="flex items-center justify-between">
+        <div className="text-[11px] font-semibold text-muted-foreground">FG 功能遊戲（含 FG / BG / 自訂）— 每「場」總倍數區間占比</div>
+        <span className="text-[11px] tabular-nums text-muted-foreground">小計 {fgTotal.toFixed(1)}%</span>
+      </div>
       <div className="space-y-1.5">
         {tiers.map((t, i) => {
           if (t.group !== 'FG') return null;
@@ -289,11 +303,10 @@ function WinDistributionEditor() {
         })}
       </div>
 
-      {!isValid && (
-        <p className="text-[11px] font-medium text-red-500">
-          ⚠ 8 個占比加總需等於 100%，目前為 {total.toFixed(1)}%
-        </p>
-      )}
+      <p className="text-[11px] leading-snug text-muted-foreground">
+        占比於各組內按相對權重正規化（不必剛好 100）。先以這些區間「產牌」建立牌庫，
+        再依占比「取牌」；倍數挑戰勝率由目標 RTP 自動反解，詳見統計面板。
+      </p>
     </div>
   );
 }

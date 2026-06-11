@@ -1,11 +1,17 @@
 import type { RoundResult } from '@/types';
 
-/** Per-mode (NG / FG / BG) stats used in the dashboard. */
+/** Per-mode (NG / FG / BG / custom) stats used in the dashboard. */
 export interface ModeStatsEntry {
   spins: number;
   hitRate: number;
   /** Average win expressed as ×bet (winning spins only). */
   avgWinX: number;
+  /** Feature modes: number of complete sessions observed. */
+  sessions: number;
+  /** Feature modes: average session total as ×bet. */
+  avgSessionX: number;
+  /** Feature modes: smallest session total as ×bet (保底 verification). */
+  minSessionX: number;
 }
 
 /** Computed, display-ready statistics snapshot. */
@@ -21,15 +27,19 @@ export interface StatsSnapshot {
   averageWinX: number; // mean win over winning rounds as ×bet
   averageBonusInterval: number; // mean rounds between bonus triggers
   bonusCount: number;
-  /** Per-mode breakdown keyed by mode label ('NG', 'FG', 'BG', …). */
+  /** Per-mode breakdown keyed by mode label ('NG', 'FG', 'BG', custom kinds). */
   modeStats: Record<string, ModeStatsEntry>;
 }
 
-/** Map an engine spin kind to a user-facing mode label. */
-function spinKindToMode(kind: string): string {
+/**
+ * Map an engine spin kind to a user-facing mode label. Custom kinds keep
+ * their own label (uppercased) so 自訂模式 are reported separately.
+ */
+export function kindToModeLabel(kind: string): string {
   if (kind === 'normal') return 'NG';
   if (kind === 'freegame' || kind === 'free') return 'FG';
-  return 'BG';
+  if (kind === 'hold') return 'BG';
+  return kind.toUpperCase();
 }
 
 interface ModeAccum {
@@ -37,6 +47,10 @@ interface ModeAccum {
   winningSpins: number;
   /** Cumulative win expressed in bet units (spinWin / bet). */
   totalWinX: number;
+  /** Feature-session tracking (one session = one round's spins of this kind). */
+  sessionCount: number;
+  sessionWinXSum: number;
+  minSessionX: number;
 }
 
 /**
@@ -83,19 +97,32 @@ export class StatisticsEngine {
     const naturalTotal = round.spins.reduce((a, s) => a + s.spinWin, 0);
     const winScale = naturalTotal > 0 ? round.totalWin / naturalTotal : 1;
 
+    // per-mode session totals within this round (kind -> ×bet sum)
+    const sessionX = new Map<string, number>();
+
     for (const s of round.spins) {
       const adjustedWin = s.spinWin * winScale;
       if (adjustedWin > 0) this.winningSpins++;
 
       // per-mode accumulation
-      const mode = spinKindToMode(s.kind);
-      let m = this.modes.get(mode);
-      if (!m) { m = { totalSpins: 0, winningSpins: 0, totalWinX: 0 }; this.modes.set(mode, m); }
+      const mode = kindToModeLabel(s.kind);
+      const m = this.mode(mode);
       m.totalSpins++;
+      const winX = round.bet > 0 ? adjustedWin / round.bet : 0;
       if (adjustedWin > 0) {
         m.winningSpins++;
-        m.totalWinX += round.bet > 0 ? adjustedWin / round.bet : 0;
+        m.totalWinX += winX;
       }
+      if (mode !== 'NG') {
+        sessionX.set(mode, (sessionX.get(mode) ?? 0) + winX);
+      }
+    }
+
+    for (const [mode, totalX] of sessionX) {
+      const m = this.mode(mode);
+      m.sessionCount++;
+      m.sessionWinXSum += totalX;
+      if (totalX < m.minSessionX) m.minSessionX = totalX;
     }
 
     if (round.totalWin > 0) {
@@ -115,6 +142,22 @@ export class StatisticsEngine {
     }
   }
 
+  private mode(label: string): ModeAccum {
+    let m = this.modes.get(label);
+    if (!m) {
+      m = {
+        totalSpins: 0,
+        winningSpins: 0,
+        totalWinX: 0,
+        sessionCount: 0,
+        sessionWinXSum: 0,
+        minSessionX: Infinity,
+      };
+      this.modes.set(label, m);
+    }
+    return m;
+  }
+
   snapshot(): StatsSnapshot {
     const modeStats: Record<string, ModeStatsEntry> = {};
     for (const [mode, m] of this.modes) {
@@ -122,6 +165,9 @@ export class StatisticsEngine {
         spins: m.totalSpins,
         hitRate: m.totalSpins > 0 ? m.winningSpins / m.totalSpins : 0,
         avgWinX: m.winningSpins > 0 ? m.totalWinX / m.winningSpins : 0,
+        sessions: m.sessionCount,
+        avgSessionX: m.sessionCount > 0 ? m.sessionWinXSum / m.sessionCount : 0,
+        minSessionX: m.sessionCount > 0 && Number.isFinite(m.minSessionX) ? m.minSessionX : 0,
       };
     }
     return {

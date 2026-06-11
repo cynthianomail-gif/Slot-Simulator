@@ -33,6 +33,7 @@ export function StatsDashboard() {
   const simReport = useGameStore((s) => s.simReport);
   const simRtpHistory = useGameStore((s) => s.simRtpHistory);
   const config = useGameStore((s) => s.config);
+  const poolInfo = useGameStore((s) => s.poolInfo);
 
   const [simRounds, setSimRounds] = useState(50_000);
 
@@ -95,31 +96,74 @@ export function StatsDashboard() {
           ))}
         </div>
 
-        {/* Per-mode stats (得分率 / 平均得分倍) */}
-        {mathTargets.length > 0 && (
+        {/* Per-mode stats (得分率 / 平均得分倍 / 場次與保底) */}
+        {(mathTargets.length > 0 || Object.keys(stats.modeStats).length > 0) && (
           <div className="space-y-1">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">各模式得分率 / 平均得分倍</div>
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">各模式得分率 / 平均得分倍 / 場次</div>
             <div className="divide-y divide-border rounded-md border border-border text-[11px]">
-              <div className="grid grid-cols-[3rem_1fr_1fr] gap-1 bg-muted/30 px-2 py-1 font-semibold text-muted-foreground">
-                <span>模式</span><span>得分率</span><span>均倍</span>
+              <div className="grid grid-cols-[2.6rem_1fr_1fr_1fr_1fr] gap-1 bg-muted/30 px-2 py-1 font-semibold text-muted-foreground">
+                <span>模式</span><span>得分率</span><span>均倍</span><span>場均倍</span><span>最低場倍</span>
               </div>
-              {mathTargets.map((t) => {
-                const actual = stats.modeStats[t.mode];
+              {[...new Set([...mathTargets.map((t) => t.mode), ...Object.keys(stats.modeStats)])].map((mode) => {
+                const t = mathTargets.find((x) => x.mode === mode);
+                const actual = stats.modeStats[mode];
+                const floor = t?.minWinX ?? 0;
+                const floorOk = !actual || actual.sessions === 0 || actual.minSessionX >= floor - 1e-6;
                 return (
-                  <div key={t.mode} className="grid grid-cols-[3rem_1fr_1fr] gap-1 px-2 py-1">
-                    <span className="font-semibold text-foreground">{t.mode}</span>
+                  <div key={mode} className="grid grid-cols-[2.6rem_1fr_1fr_1fr_1fr] gap-1 px-2 py-1">
+                    <span className="font-semibold text-foreground">{mode}</span>
                     <span>
                       <span className="tabular-nums">{actual ? pct(actual.hitRate) : '—'}</span>
-                      <span className="ml-1 text-muted-foreground">/ {pct(t.hitRate, 1)}</span>
+                      {t && <span className="ml-1 text-muted-foreground">/ {pct(t.hitRate, 1)}</span>}
                     </span>
                     <span>
                       <span className="tabular-nums">{actual ? fmt(actual.avgWinX) : '—'}</span>
-                      <span className="ml-1 text-muted-foreground">/ {fmt(t.avgWinX)}</span>
+                      {t && <span className="ml-1 text-muted-foreground">/ {fmt(t.avgWinX)}</span>}
+                    </span>
+                    <span className="tabular-nums">
+                      {actual && actual.sessions > 0 ? `${fmt(actual.avgSessionX)}x` : '—'}
+                      {actual && actual.sessions > 0 && (
+                        <span className="ml-1 text-muted-foreground">({fmtInt(actual.sessions)}場)</span>
+                      )}
+                    </span>
+                    <span className={`tabular-nums ${floorOk ? '' : 'font-semibold text-red-500'}`}>
+                      {actual && actual.sessions > 0 ? `${fmt(actual.minSessionX)}x` : '—'}
+                      {floor > 0 && <span className="ml-1 text-muted-foreground">/ 保底{floor}x</span>}
                     </span>
                   </div>
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* 牌庫（產牌→取牌）資訊 */}
+        {poolInfo && (
+          <div className="space-y-1 rounded-md border border-border bg-muted/20 p-2">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">牌庫取牌模型</div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]">
+              <span className="text-muted-foreground">倍數挑戰勝率</span>
+              <span className="tabular-nums font-semibold">{pct(poolInfo.challengeQ)}</span>
+              <span className="text-muted-foreground">解析期望 RTP</span>
+              <span className="tabular-nums">{pct(poolInfo.expectedRTP)}</span>
+              <span className="text-muted-foreground">NG 實際得分率（設定×挑戰）</span>
+              <span className="tabular-nums">{pct(poolInfo.observedHitRateNG)}</span>
+              <span className="text-muted-foreground">牌庫自然得分率</span>
+              <span className="tabular-nums">{pct(poolInfo.naturalHitRate)}</span>
+              {poolInfo.boost !== 1 && (
+                <>
+                  <span className="text-muted-foreground">全域加成</span>
+                  <span className="tabular-nums text-amber-500">×{fmt(poolInfo.boost, 3)}</span>
+                </>
+              )}
+            </div>
+            {poolInfo.notes.length > 0 && (
+              <ul className="space-y-0.5 text-[10px] leading-snug text-amber-500">
+                {poolInfo.notes.map((n, i) => (
+                  <li key={i}>⚠ {n}</li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 

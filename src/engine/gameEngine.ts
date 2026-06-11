@@ -9,12 +9,13 @@ import type {
 } from '@/types';
 import type { IRng } from './rng';
 import { EventLog } from './eventLog';
-import { spinReels, gridFromStops, reelSymbolWeights } from './reel';
+import { spinReels, gridFromStops } from './reel';
 import { evaluate } from './pay';
 import { evalTriggers, type TriggerContext } from './trigger';
 import { createFeature } from '@/features/registry';
 import type { FeatureRunContext } from '@/features/types';
-import { WinDistTracker } from './winDistribution';
+import { cascadeRefillGrid } from './spinRunner';
+import { CardPool, type PoolInfo } from './cardPool';
 
 /** Options controlling a single round (also the cheat / buy injection surface). */
 export interface PlayOptions {
@@ -60,11 +61,18 @@ function injectSymbols(
 
 const SAFE_CASCADE_CAP = 50;
 const SAFE_FEATURE_SPIN_CAP = 5000;
+const MAX_WIN_X = 12_000;
 
 /**
  * GameEngine — the deterministic heart of the simulator. UI-free and
  * animation-free; both the live client and the high-speed simulation drive it.
  * Given the same RNG seed and config, playRound() is fully reproducible.
+ *
+ * Two operating models:
+ *  - 牌庫模式 (card pool): when `math.winDistribution` is configured, a
+ *    pre-generated board library drives outcomes (產牌 → 取牌 → 挑戰),
+ *    locking RTP to `math.targetRTP`.
+ *  - 自然模式 (natural): without a distribution the reels decide everything.
  */
 export class GameEngine {
   config: GameConfig;
@@ -79,7 +87,7 @@ export class GameEngine {
   private bet = 0;
   private forcedStops: number[] | undefined;
   private forceSymbols: { id: string; count: number }[] | undefined;
-  private distTracker: WinDistTracker | null = null;
+  private pool: CardPool | null = null;
 
   constructor(config: GameConfig, rng: IRng, log: EventLog) {
     this.config = config;
@@ -88,8 +96,14 @@ export class GameEngine {
 
     const dist = config.math.winDistribution;
     if (dist && dist.length > 0) {
-      this.distTracker = new WinDistTracker(dist, config.math.targetRTP);
+      // 產牌 phase — build the board library up-front (deterministic per seed)
+      this.pool = new CardPool(config, rng);
     }
+  }
+
+  /** Pool statistics for the dashboard (null in natural mode). */
+  get poolInfo(): PoolInfo | null {
+    return this.pool?.info ?? null;
   }
 
   private setState(s: GameState): void {
@@ -110,32 +124,138 @@ export class GameEngine {
     this.setState('ROUND_START');
     this.log.emit('ROUND_START', { bet: opts.bet, seed: this.rng.seed });
 
+    // Cheats that manipulate the board bypass the pool (natural path).
+    const cheating =
+      (opts.forceMaxWinX && opts.forceMaxWinX > 0) ||
+      (opts.forcedStops && opts.forcedStops.length > 0) ||
+      (opts.forceSymbols && opts.forceSymbols.length > 0);
+
+    const round =
+      this.pool && !cheating ? this.poolRound(opts) : this.naturalRound(opts);
+
+    this.setState('ROUND_END');
+    this.log.emit('ROUND_END', {
+      totalWin: round.totalWin,
+      roundReturn: round.roundReturn,
+      spins: round.spins.length,
+    });
+    this.setState('IDLE');
+    return round;
+  }
+
+  /* ------------------------- Pool model (取牌) -------------------------- */
+
+  private poolRound(opts: PlayOptions): RoundResult {
+    const pool = this.pool!;
     const spins: SpinResult[] = [];
     const triggeredFeatures: string[] = [];
 
-    // --- base spin ---
-    let base = this.runSpin('normal');
-    this.forcedStops = undefined; // forced stops only apply to the base spin
-    this.forceSymbols = undefined; // forced symbols only apply to the base spin
+    // 1) triggers: natural roll (pool-measured rates) + forced (buy / cheat)
+    const firedIds = new Set(pool.drawTriggers(this.rng));
+    for (const forced of opts.forcedTriggers ?? []) firedIds.add(forced);
 
-    // --- distribution challenge (before triggers) ---
-    // The challenge decides whether a winning board is shown at all.
-    // If challenge fails → re-spin to get a non-winning board.
-    let distBaseWin: number | undefined;
-    const useCheatWin = opts.forceMaxWinX && opts.forceMaxWinX > 0;
-    if (this.distTracker && !useCheatWin) {
-      distBaseWin = this.distTracker.adjust(base.spinWin, this.bet, false, this.rng);
-      if (base.spinWin > 0 && distBaseWin <= 0) {
-        base = this.respinNoWin();
-        distBaseWin = 0;
+    // trigKey for board display: only natural trigger ids that exist in config
+    const displayTrigs: string[] = [];
+    for (const id of firedIds) {
+      if (this.config.triggers.some((t) => t.id === id)) displayTrigs.push(id);
+      else {
+        // forced id may name a feature — show the board of a trigger targeting it
+        const trig = this.config.triggers.find((t) => t.target === id);
+        if (trig) displayTrigs.push(trig.id);
       }
     }
+    const trigKey = [...new Set(displayTrigs)].sort().join('+');
 
+    // 2) base spin 取牌: 得分率 roll → 占比 tier → 倍數挑戰
+    this.log.spinId++;
+    this.setState('SPINNING');
+    const base = pool.drawBase(this.rng, trigKey);
+    const baseSpin = base.spin;
+    baseSpin.spinId = this.log.spinId;
+    baseSpin.spinWin = base.winX * this.bet;
+    baseSpin.firedTriggers = [...firedIds];
+    this.lastReelStops = baseSpin.reelStops;
+    this.setState('SPIN_STOP');
+    this.log.emit('REEL_STOP', { kind: 'normal', stops: baseSpin.reelStops });
+    if (base.winX > 0) {
+      this.log.emit('WIN', { kind: 'normal', pay: baseSpin.spinWin, winX: base.winX });
+    }
+    spins.push(baseSpin);
+    let totalX = base.winX;
+
+    // 3) feature sessions 取牌
+    this.setState('FEATURE_TRIGGER');
+    for (const triggerId of firedIds) {
+      const trigger = this.config.triggers.find((t) => t.id === triggerId);
+      const featureEntryId = trigger?.target ?? triggerId;
+      const entry = this.config.features.find(
+        (f) => f.id === featureEntryId && f.enabled,
+      );
+      if (!entry) continue;
+
+      this.emitTriggerEvent(entry.type);
+      this.setState('FEATURE_RUNNING');
+      this.activeFeature = entry.id;
+
+      const session = pool.drawSession(entry.id, this.rng);
+      if (session) {
+        for (const s of session.spins) {
+          this.log.spinId++;
+          s.spinId = this.log.spinId;
+          s.spinWin = s.spinWin * this.bet;
+          spins.push(s);
+          this.log.emit('REEL_STOP', { kind: s.kind, stops: s.reelStops });
+          if (s.spinWin > 0) this.log.emit('WIN', { kind: s.kind, pay: s.spinWin });
+        }
+        totalX += session.totalX;
+        this.log.emit('FEATURE_END', {
+          feature: entry.type,
+          id: entry.id,
+          win: session.totalX * this.bet,
+        });
+      } else {
+        // no pool for this feature — run it live (natural)
+        const win = this.runFeatureLive(entry, spins);
+        totalX += this.bet > 0 ? win / this.bet : 0;
+      }
+
+      this.featureState = 'COMPLETE';
+      triggeredFeatures.push(entry.id);
+      this.activeFeature = null;
+    }
+    this.featureState = triggeredFeatures.length > 0 ? 'COMPLETE' : 'INACTIVE';
+
+    // 4) settle — residual boost keeps RTP locked when 占比 can't reach it
+    let totalWin = totalX * this.bet * pool.boost;
+    if (this.bet > 0 && totalWin > MAX_WIN_X * this.bet) {
+      totalWin = MAX_WIN_X * this.bet;
+    }
+
+    return {
+      roundId: this.log.roundId,
+      bet: this.bet,
+      spins,
+      totalWin,
+      roundReturn: this.bet > 0 ? totalWin / this.bet : 0,
+      triggeredFeatures,
+    };
+  }
+
+  /* ----------------------- Natural model (自然) ------------------------- */
+
+  private naturalRound(opts: PlayOptions): RoundResult {
+    const spins: SpinResult[] = [];
+    const triggeredFeatures: string[] = [];
+    const useCheatWin = opts.forceMaxWinX && opts.forceMaxWinX > 0;
+
+    // --- base spin ---
+    const base = this.runSpin('normal');
+    this.forcedStops = undefined; // forced stops only apply to the base spin
+    this.forceSymbols = undefined; // forced symbols only apply to the base spin
     spins.push(base);
 
-    // --- trigger evaluation on the (possibly replaced) base spin's final grid ---
-    const finalGrid = lastGrid(base);
-    const ctx = this.buildTriggerContext(finalGrid, base.spinWin);
+    // --- trigger evaluation on the base spin's grid ---
+    const ctx = this.buildTriggerContext(base.grid, base.spinWin);
     const fired = evalTriggers(this.config.triggers, ctx);
 
     const firedIds = new Set(fired.map((t) => t.id));
@@ -146,69 +266,33 @@ export class GameEngine {
     this.setState('FEATURE_TRIGGER');
     for (const triggerId of firedIds) {
       const trigger = this.config.triggers.find((t) => t.id === triggerId);
-      // forced ids may name either a trigger id or directly a feature id
       const featureEntryId = trigger?.target ?? triggerId;
       const entry = this.config.features.find(
         (f) => f.id === featureEntryId && f.enabled,
       );
       if (!entry) continue;
-
       const plugin = createFeature(entry.type);
       if (!plugin) continue;
 
       this.emitTriggerEvent(entry.type);
       this.setState('FEATURE_RUNNING');
       this.activeFeature = entry.id;
-
-      const fctx: FeatureRunContext = {
-        config: this.config,
-        rng: this.rng,
-        bet: this.bet,
-        runSpin: (kind: string) => {
-          if (spins.length > SAFE_FEATURE_SPIN_CAP) {
-            // runaway guard
-            return this.makeEmptySpin(kind);
-          }
-          const s = this.runSpin(kind);
-          spins.push(s);
-          return s;
-        },
-        emit: (type, payload) => this.log.emit(type, payload),
-      };
-
-      const result = plugin.run(entry, fctx);
-      this.featureState = plugin.state;
+      this.runFeatureLive(entry, spins);
       triggeredFeatures.push(entry.id);
-      void result;
       this.activeFeature = null;
     }
 
     // --- settle round ---
     let totalWin: number;
-
     if (useCheatWin) {
       totalWin = opts.forceMaxWinX! * this.bet;
       this.log.emit('CHEAT', { type: 'FORCE_MAX_WIN', x: opts.forceMaxWinX });
-    } else if (distBaseWin !== undefined) {
-      const featureWin = spins.slice(1).reduce((a, s) => a + s.spinWin, 0);
-      totalWin = distBaseWin + featureWin;
     } else {
       totalWin = spins.reduce((a, s) => a + s.spinWin, 0);
     }
-
-    // Hard cap: single round never exceeds 12000× bet
-    const MAX_WIN_X = 12_000;
     if (this.bet > 0 && totalWin > MAX_WIN_X * this.bet) {
       totalWin = MAX_WIN_X * this.bet;
     }
-
-    this.setState('ROUND_END');
-    this.log.emit('ROUND_END', {
-      totalWin,
-      roundReturn: this.bet > 0 ? totalWin / this.bet : 0,
-      spins: spins.length,
-    });
-    this.setState('IDLE');
 
     return {
       roundId: this.log.roundId,
@@ -218,6 +302,33 @@ export class GameEngine {
       roundReturn: this.bet > 0 ? totalWin / this.bet : 0,
       triggeredFeatures,
     };
+  }
+
+  /** Run a feature plugin live with natural spins; returns the feature win. */
+  private runFeatureLive(
+    entry: GameConfig['features'][number],
+    spins: SpinResult[],
+  ): number {
+    const plugin = createFeature(entry.type);
+    if (!plugin) return 0;
+    const fctx: FeatureRunContext = {
+      config: this.config,
+      rng: this.rng,
+      bet: this.bet,
+      runSpin: (kind: string) => {
+        if (spins.length > SAFE_FEATURE_SPIN_CAP) {
+          // runaway guard
+          return this.makeEmptySpin(kind);
+        }
+        const s = this.runSpin(kind);
+        spins.push(s);
+        return s;
+      },
+      emit: (type, payload) => this.log.emit(type, payload),
+    };
+    const result = plugin.run(entry, fctx);
+    this.featureState = plugin.state;
+    return result.win;
   }
 
   /* -------------------------------- Spin -------------------------------- */
@@ -272,7 +383,7 @@ export class GameEngine {
         this.log.cascadeId++;
         this.setState('CASCADE_RUNNING');
         this.log.emit('CASCADE', { kind, step: this.log.cascadeId });
-        grid = this.cascadeRefill(grid, res, mode);
+        grid = cascadeRefillGrid(this.config, this.rng, grid, res, mode);
       } else {
         break;
       }
@@ -290,96 +401,6 @@ export class GameEngine {
       spinWin,
       firedTriggers: [],
     };
-  }
-
-  /**
-   * Re-spin reels (without logging) until the board has no natural wins.
-   * Used when the distribution challenge fails — the player should see a
-   * non-winning board instead of the original winning one.
-   */
-  private respinNoWin(): SpinResult {
-    for (let i = 0; i < 100; i++) {
-      const outcome = spinReels(this.config, this.rng, 'NG');
-      const grid = outcome.grid;
-      const res = evaluate(this.config, grid);
-      if (res.totalPay <= 0) {
-        this.lastReelStops = outcome.reelStops;
-        return {
-          spinId: this.log.spinId,
-          kind: 'normal',
-          reelStops: outcome.reelStops,
-          grid,
-          gridSteps: [grid],
-          cascades: [res],
-          spinWin: 0,
-          firedTriggers: [],
-        };
-      }
-    }
-    // Fallback: use last spin even if it has wins (very high hit rate config)
-    const outcome = spinReels(this.config, this.rng, 'NG');
-    const grid = outcome.grid;
-    const res = evaluate(this.config, grid);
-    this.lastReelStops = outcome.reelStops;
-    return {
-      spinId: this.log.spinId,
-      kind: 'normal',
-      reelStops: outcome.reelStops,
-      grid,
-      gridSteps: [grid],
-      cascades: [res],
-      spinWin: res.totalPay * this.bet,
-      firedTriggers: [],
-    };
-  }
-
-  /* ------------------------------ Cascade ------------------------------- */
-
-  /**
-   * Refill the grid after a win, per config.cascade.refill:
-   *  - fillDown   : remove winning cells, collapse down, fill from the top.
-   *  - clearMatch : also remove every cell sharing a winning symbol id.
-   *  - respin     : refill the cleared cells in place (no gravity).
-   */
-  private cascadeRefill(grid: GridResult, res: EvalResult, mode: string): GridResult {
-    const method = this.config.cascade?.refill ?? 'fillDown';
-    const remove = new Set<string>();
-    for (const w of res.wins) {
-      for (const c of w.cells) remove.add(`${c.col}:${c.row}`);
-    }
-    if (method === 'clearMatch') {
-      const winIds = new Set(res.wins.map((w) => w.symbolId));
-      for (let col = 0; col < grid.columns.length; col++) {
-        for (let row = 0; row < grid.columns[col].length; row++) {
-          if (winIds.has(grid.columns[col][row])) remove.add(`${col}:${row}`);
-        }
-      }
-    }
-
-    const pick = (col: number): string => {
-      const { ids, weights } = reelSymbolWeights(this.config, col, mode);
-      return ids[this.rng.weightedIndex(weights)];
-    };
-
-    if (method === 'respin') {
-      // refill the cleared cells where they are; nothing collapses
-      const columns = grid.columns.map((column, col) =>
-        column.map((id, row) => (remove.has(`${col}:${row}`) ? pick(col) : id)),
-      );
-      return { cols: grid.cols, shape: [...grid.shape], columns };
-    }
-
-    // fillDown / clearMatch: survivors fall, fresh symbols fill the top
-    const columns = grid.columns.map((column, col) => {
-      const survivors: string[] = [];
-      for (let row = 0; row < column.length; row++) {
-        if (!remove.has(`${col}:${row}`)) survivors.push(column[row]);
-      }
-      while (survivors.length < column.length) survivors.push(pick(col));
-      return survivors;
-    });
-
-    return { cols: grid.cols, shape: [...grid.shape], columns };
   }
 
   /* ------------------------------ Helpers ------------------------------- */
@@ -421,9 +442,4 @@ export class GameEngine {
       firedTriggers: [],
     };
   }
-}
-
-/** Final grid of a spin (after the last cascade). */
-function lastGrid(spin: SpinResult): GridResult {
-  return spin.grid;
 }

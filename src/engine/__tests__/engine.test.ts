@@ -62,6 +62,7 @@ describe('Cascade mechanic', () => {
     const cfg = clone(defaultConfig);
     cfg.cascade = { enabled: true, showStepWin: true, refill: 'fillDown' };
     cfg.math.mode = 'weight';
+    cfg.math.winDistribution = undefined; // natural mode — test the raw cascade mechanic
     cfg.grid = { cols: 3, shape: [1, 1, 1] };
     cfg.pay = { mode: 'payline', minMatch: 3, paylines: [{ id: 1, rows: [0, 0, 0] }] };
     cfg.symbols = [{ id: 'X', name: 'X', type: ['normal'], weight: 1, payout: [5, 5, 5] }];

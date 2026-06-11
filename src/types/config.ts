@@ -12,6 +12,13 @@ export interface MathTarget {
   hitRate: number;
   /** Target average win expressed as a multiple of bet (winning spins only). */
   avgWinX: number;
+  /**
+   * 保底倍數 — guaranteed minimum win multiplier.
+   * NG: minimum multiplier of a scoring spin.
+   * Feature modes (FG/BG/custom): minimum TOTAL multiplier of one feature
+   * session (e.g. 20 → every free-game session pays at least 20×).
+   */
+  minWinX?: number;
 }
 
 /** Pay evaluation model. */

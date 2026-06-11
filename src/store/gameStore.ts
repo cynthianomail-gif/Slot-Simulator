@@ -16,6 +16,7 @@ import { applyCheats, type CheatState } from '@/engine/cheats';
 import { resolveBuy } from '@/engine/buyFeature';
 import { runSimulation, type SimulationReport } from '@/engine/simulation';
 import { StatisticsEngine, type StatsSnapshot } from '@/engine/statistics';
+import type { PoolInfo } from '@/engine/cardPool';
 import { clone } from '@/lib/utils';
 
 type Speed = 'normal' | 'turbo';
@@ -82,6 +83,8 @@ interface GameStore {
   events: GameEvent[];
   stats: StatsSnapshot;
   rtpHistory: RtpSample[];
+  /** 牌庫（產牌→取牌）統計；自然模式時為 null。 */
+  poolInfo: PoolInfo | null;
 
   /* cheats */
   cheats: CheatState;
@@ -339,6 +342,7 @@ export const useGameStore = create<GameStore>((set, get) => {
   events: [],
   stats: liveStats.snapshot(),
   rtpHistory: [],
+  poolInfo: session.engine.poolInfo,
 
   cheats: { armedTriggers: [], forceMaxWin: false, maxWinX: 5000 },
 
@@ -367,6 +371,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       events: [],
       stats: liveStats.snapshot(),
       rtpHistory: [],
+      poolInfo: session.engine.poolInfo,
       roundWin: 0,
       lastRound: null,
       state: 'IDLE',
@@ -616,6 +621,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     set((s) => ({
       displayGrid: emptyGrid(next.grid.shape, next.symbols.at(-1)?.id ?? 'LJ'),
       collectPots: reconcileCollect(next, s.collectPots),
+      poolInfo: session.engine.poolInfo,
     }));
   },
 

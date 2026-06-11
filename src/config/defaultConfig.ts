@@ -27,7 +27,9 @@ export const defaultConfig: GameConfig = {
     targetRTP: 0.985,
     targetBF: 150,
     targets: [
-      { mode: 'NG', hitRate: 0.25, avgWinX: 1.5 },
+      { mode: 'NG', hitRate: 0.25, avgWinX: 1.5, minWinX: 0 },
+      // FG 保底 20×：每次免費遊戲（含再觸發）的總倍數至少 20 倍
+      { mode: 'FG', hitRate: 0.45, avgWinX: 60, minWinX: 20 },
     ],
     winDistribution: [
       { label: 'NG低倍', group: 'NG', min: 0, max: 2, percent: 20 },
