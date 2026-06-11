@@ -112,23 +112,13 @@ export function StatsDashboard() {
                 return (
                   <div key={mode} className="grid grid-cols-[2.6rem_1fr_1fr_1fr_1fr] gap-1 px-2 py-1">
                     <span className="font-semibold text-foreground">{mode}</span>
-                    <span>
-                      <span className="tabular-nums">{actual ? pct(actual.hitRate) : '—'}</span>
-                      {t && <span className="ml-1 text-muted-foreground">/ {pct(t.hitRate, 1)}</span>}
-                    </span>
-                    <span>
-                      <span className="tabular-nums">{actual ? fmt(actual.avgWinX) : '—'}</span>
-                      {t && <span className="ml-1 text-muted-foreground">/ {fmt(t.avgWinX)}</span>}
-                    </span>
+                    <span className="tabular-nums">{actual ? pct(actual.hitRate) : '—'}</span>
+                    <span className="tabular-nums">{actual ? fmt(actual.avgWinX) : '—'}</span>
                     <span className="tabular-nums">
                       {actual && actual.sessions > 0 ? `${fmt(actual.avgSessionX)}x` : '—'}
-                      {actual && actual.sessions > 0 && (
-                        <span className="ml-1 text-muted-foreground">({fmtInt(actual.sessions)}局)</span>
-                      )}
                     </span>
                     <span className={`tabular-nums ${floorOk ? '' : 'font-semibold text-red-500'}`}>
                       {actual && actual.sessions > 0 ? `${fmt(actual.minSessionX)}x` : '—'}
-                      {floor > 0 && <span className="ml-1 text-muted-foreground">/ 保底{floor}x</span>}
                     </span>
                   </div>
                 );
