@@ -120,6 +120,8 @@ interface GameStore {
   clearCheats: () => void;
   updateConfig: (mutator: (c: GameConfig) => void) => void;
   resetConfig: () => void;
+  /** Replace the whole config (e.g. from an imported設定檔) and re-init. */
+  loadConfig: (config: GameConfig) => void;
   startAuto: (count: number | 'inf') => void;
   stopAuto: () => void;
   startSim: (rounds: number) => Promise<void>;
@@ -364,6 +366,18 @@ export const useGameStore = create<GameStore>((set, get) => {
     const { config, useFixedSeed, seed } = get();
     session = createSession(config, useFixedSeed ? seed : null);
     liveStats = new StatisticsEngine();
+    // Cancel any in-flight spin/feature playback so a deferred animation callback
+    // (finishPresentation / playNextSpin / auto-spin) can't settle a previous
+    // round against the freshly (re)initialised game — e.g. importing mid-spin.
+    pendingRound = null;
+    spinQueue = [];
+    currentSpinFinalGrid = null;
+    accumulatedWin = 0;
+    featureTotal = 0;
+    featureDone = 0;
+    roundWinScale = 1;
+    fcTimers.forEach((t) => clearTimeout(t));
+    fcTimers = [];
     set({
       balance: config.user.balance,
       bet: config.bet.default,
@@ -375,6 +389,9 @@ export const useGameStore = create<GameStore>((set, get) => {
       roundWin: 0,
       lastRound: null,
       state: 'IDLE',
+      spinning: false,
+      presentation: null,
+      featureLabel: null,
       collectPots: reconcileCollect(config, null),
     });
   },
@@ -627,6 +644,18 @@ export const useGameStore = create<GameStore>((set, get) => {
 
   resetConfig: () => {
     set({ config: clone(defaultConfig) });
+    get().init();
+  },
+
+  loadConfig: (config) => {
+    // stop any auto/sim playback before swapping the whole game out
+    set({
+      config: clone(config),
+      autoInfinite: false,
+      autoRemaining: 0,
+      cheats: { armedTriggers: [], forceMaxWin: false, maxWinX: 5000 },
+      simReport: null,
+    });
     get().init();
   },
 

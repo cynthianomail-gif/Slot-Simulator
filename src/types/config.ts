@@ -189,6 +189,18 @@ export interface GameConfig {
   };
 
   /**
+   * Per-reel × per-mode symbol weights, imported from a design sheet
+   * (e.g. SlotPlanner Pro 的 04_Reel_Weights).
+   *   reelWeights[mode][colIndex][symbolId] = weight
+   * When an entry exists for a (mode, col, symbol) it overrides the scalar
+   * `symbol.weight` / `modeWeights` for the weight-based draw on that reel.
+   * A non-NG mode falls back to the NG layer for any reel it doesn't define,
+   * and any missing symbol falls back to `symbol.weight`. Only consulted by
+   * the 'weight' math model.
+   */
+  reelWeights?: Record<string, Record<number, Record<string, number>>>;
+
+  /**
    * "假盤" — spin-visual weight overrides, decoupled from the math weights.
    * When enabled, the spinning blur samples these instead of symbol weights.
    */

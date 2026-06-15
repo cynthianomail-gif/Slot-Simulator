@@ -7,6 +7,7 @@ import { ReelEditor } from './editors/ReelEditor';
 import { TriggerFeatureEditor } from './editors/TriggerFeatureEditor';
 import { CheatBuyPanel } from './editors/CheatBuyPanel';
 import { SystemEditor } from './editors/SystemEditor';
+import { ImportButton } from './ImportButton';
 import { RotateCcw, Settings2, Palette, Layers, Zap, Crosshair, Timer } from 'lucide-react';
 
 export function ConfigPanel() {
@@ -19,9 +20,12 @@ export function ConfigPanel() {
           <Settings2 className="h-4 w-4 text-muted-foreground" />
           <div className="text-sm font-bold tracking-wide">遊戲設定</div>
         </div>
-        <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={resetConfig}>
-          <RotateCcw className="h-3.5 w-3.5" /> 重置
-        </Button>
+        <div className="flex items-center gap-1">
+          <ImportButton />
+          <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={resetConfig}>
+            <RotateCcw className="h-3.5 w-3.5" /> 重置
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="general" className="flex min-h-0 flex-1 flex-col">

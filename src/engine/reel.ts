@@ -29,8 +29,17 @@ export function reelSymbolWeights(
   mode = 'NG',
 ): { ids: string[]; weights: number[] } {
   const reelNo = col + 1; // excludeReels is authored 1-indexed
-  const w = (s: GameConfig['symbols'][number]) =>
-    Math.max(0, (mode !== 'NG' && s.modeWeights?.[mode] != null) ? s.modeWeights[mode].weight : s.weight);
+  // Per-reel × per-mode override table (imported design sheet). A non-NG mode
+  // falls back to the NG layer for reels it doesn't define; a missing symbol
+  // falls back to the scalar weight / modeWeights below.
+  const rw = config.reelWeights;
+  const rwCol = rw
+    ? rw[mode]?.[col] ?? (mode !== 'NG' ? rw['NG']?.[col] : undefined)
+    : undefined;
+  const w = (s: GameConfig['symbols'][number]) => {
+    if (rwCol && rwCol[s.id] != null) return Math.max(0, rwCol[s.id]);
+    return Math.max(0, (mode !== 'NG' && s.modeWeights?.[mode] != null) ? s.modeWeights[mode].weight : s.weight);
+  };
   const ids: string[] = [];
   const weights: number[] = [];
   for (const s of config.symbols) {
