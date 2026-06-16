@@ -139,7 +139,8 @@ export function parseSlotPlannerMatrices(
   while (shape.length < cols) shape.push(shape[shape.length - 1] ?? 3);
 
   const symbols: SymbolDefinition[] = [];
-  const maxCountNotes: string[] = [];
+  const symbolCaps: { symbolId: string; max: number; modes?: string[] }[] = [];
+  const capNotes: string[] = [];
   for (const r of symbolRecs) {
     const id = field(r, 'Symbol_ID', 'ID').trim();
     if (!id) continue;
@@ -162,7 +163,10 @@ export function parseSlotPlannerMatrices(
     }
 
     const maxCount = numOr(field(r, 'Max_Count'), 0);
-    if (truthy(field(r, 'Use_Max')) && maxCount > 0) maxCountNotes.push(`${id}=${maxCount}`);
+    if (truthy(field(r, 'Use_Max')) && maxCount > 0) {
+      symbolCaps.push({ symbolId: id, max: maxCount });
+      capNotes.push(`${id}≤${maxCount}`);
+    }
 
     symbols.push({
       id,
@@ -174,9 +178,6 @@ export function parseSlotPlannerMatrices(
     });
   }
   if (!symbols.length) warnings.push('03_Symbols 找不到任何圖示，匯入可能不完整。');
-  if (maxCountNotes.length) {
-    warnings.push(`03_Symbols 圖示數量上限 Max_Count（${maxCountNotes.join('、')}）無引擎機制，已略過。`);
-  }
 
   const symById = new Map(symbols.map((s) => [s.id, s]));
 
@@ -198,10 +199,18 @@ export function parseSlotPlannerMatrices(
         sym.excludeReels = [...excl].sort((a, b) => a - b);
         info.push(`07_Constraints：${symId} 限定於第 ${[...allowed].sort((a, b) => a - b).join(',')} 軸。`);
       }
-    } else if (type === 'GLOBAL_MAX' || type === 'GLOBAL_MIN') {
-      warnings.push(`07_Constraints ${type}（${symId || '全域'}）無引擎機制，已略過。`);
+    } else if (type === 'GLOBAL_MAX') {
+      const max = Math.round(numOr(field(r, 'Max_Count_Global', 'Max_Count'), -1));
+      const scope = (field(r, 'Mode_Scope', 'Scope') || 'ALL').trim().toUpperCase();
+      if (symById.has(symId) && max >= 0) {
+        symbolCaps.push({ symbolId: symId, max, ...(scope && scope !== 'ALL' ? { modes: [scope] } : {}) });
+        capNotes.push(`${symId}≤${max}${scope && scope !== 'ALL' ? `(${scope})` : ''}`);
+      }
+    } else if (type === 'GLOBAL_MIN') {
+      warnings.push(`07_Constraints GLOBAL_MIN（${symId || '全域'}）最少數量限制無引擎機制，已略過。`);
     }
   }
+  if (capNotes.length) info.push(`圖示數量上限已套用（盤面最多）：${capNotes.join('、')}。`);
 
   /* ---- 04_Reel_Weights → reelWeights[mode][col][symbolId] ---- */
   const reelWeights: Record<string, Record<number, Record<string, number>>> = {};
@@ -219,6 +228,25 @@ export function parseSlotPlannerMatrices(
   const hasReelWeights = Object.keys(reelWeights).length > 0;
   if (hasReelWeights) {
     info.push(`04_Reel_Weights：套用每軸 × 每模式權重（模式：${[...modesSeen].sort().join('、')}）。`);
+  }
+
+  /* ---- 08_Combo_Weights → comboWeights[mode][step][col][symbolId] ---- */
+  const comboWeights: Record<string, Record<number, Record<number, Record<string, number>>>> = {};
+  let comboMaxStep = 0;
+  for (const r of records(getSheet(m, 'combo_weights'))) {
+    const mode = (field(r, 'Mode_Scope', 'Mode') || 'NG').trim().toUpperCase();
+    const step = parseInt(field(r, 'Combo_Step', 'Step'), 10);
+    const reelId = parseInt(field(r, 'Reel_ID', 'Reel'), 10);
+    const symId = field(r, 'Symbol_ID', 'Symbol').trim();
+    const wt = numOr(field(r, 'Weight'), NaN);
+    if (!Number.isFinite(step) || !Number.isFinite(reelId) || !symId || !Number.isFinite(wt)) continue;
+    if (!symById.has(symId)) continue;
+    (((comboWeights[mode] ??= {})[step] ??= {})[reelId - 1] ??= {})[symId] = wt;
+    comboMaxStep = Math.max(comboMaxStep, step);
+  }
+  const hasComboWeights = Object.keys(comboWeights).length > 0;
+  if (hasComboWeights) {
+    info.push(`08_Combo_Weights：已載入連爆逐步權重（最多 ${comboMaxStep} 步），於「連爆」啟用時生效。`);
   }
 
   /* ---- 06_Paylines ---- */
@@ -313,10 +341,7 @@ export function parseSlotPlannerMatrices(
     info.push('數學目標（得分率/均倍）為占位預設值，可於「一般」分頁調整；不影響轉動與中獎判定。');
   }
 
-  /* ---- 08/09/10/12：列為略過 ---- */
-  if (records(getSheet(m, 'combo_weights')).length) {
-    warnings.push('08_Combo_Weights（連爆逐步權重）無引擎機制，連爆維持關閉，已略過。');
-  }
+  /* ---- 09/10/12：列為略過 ---- */
   if (records(getSheet(m, 'puzzle_rules')).length) {
     warnings.push('09_Puzzle_Rules（拼圖/重構規則）無引擎機制，已略過。');
   }
@@ -330,7 +355,7 @@ export function parseSlotPlannerMatrices(
   // 賠付/權重健康檢查（讓使用者知道為何按 Spin 不會中獎）
   const anyPay = symbols.some((s) => s.payout.some((p) => p > 0));
   if (!anyPay) {
-    warnings.push('所有圖示賠付皆為 0：盤面會正常轉動但不會中獎，請於設定檔填好賠付後重新匯入，或於「圖示」分頁調整。');
+    warnings.push('注意（非引擎限制，資料未填）：設定檔所有圖示賠付為 0 → 盤面會正常轉動但不會中獎。請於設定檔填好 Pay_3x~6x 後重新匯入，或於「圖示」分頁直接調整。');
   }
 
   /* ------------------------------ assemble ------------------------------- */
@@ -361,6 +386,8 @@ export function parseSlotPlannerMatrices(
       strips: Array.from({ length: cols }, () => symbols.map((s) => s.id)),
     },
     ...(hasReelWeights ? { reelWeights } : {}),
+    ...(symbolCaps.length ? { symbolCaps } : {}),
+    ...(hasComboWeights ? { comboWeights } : {}),
     triggers,
     features,
     buyOptions: [],

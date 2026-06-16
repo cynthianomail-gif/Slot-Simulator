@@ -1,6 +1,6 @@
 import type { GameConfig, GridResult, SpinResult, EvalResult } from '@/types';
 import type { IRng } from './rng';
-import { spinReels, reelSymbolWeights } from './reel';
+import { spinReels, reelSymbolWeights, effectiveCaps, drawCapped } from './reel';
 import { evaluate } from './pay';
 
 /**
@@ -30,6 +30,7 @@ export function cascadeRefillGrid(
   grid: GridResult,
   res: EvalResult,
   mode: string,
+  comboStep?: number,
 ): GridResult {
   const method = config.cascade?.refill ?? 'fillDown';
   const remove = new Set<string>();
@@ -45,9 +46,23 @@ export function cascadeRefillGrid(
     }
   }
 
+  // Board caps span survivors + refills: seed the counter with the cells that
+  // stay so a refill never pushes a capped symbol over its limit.
+  const caps = effectiveCaps(config, mode);
+  const placed: Record<string, number> = {};
+  if (caps.size > 0) {
+    for (let col = 0; col < grid.columns.length; col++) {
+      for (let row = 0; row < grid.columns[col].length; row++) {
+        if (remove.has(`${col}:${row}`)) continue;
+        const id = grid.columns[col][row];
+        placed[id] = (placed[id] ?? 0) + 1;
+      }
+    }
+  }
+
   const pick = (col: number): string => {
-    const { ids, weights } = reelSymbolWeights(config, col, mode);
-    return ids[rng.weightedIndex(weights)];
+    const { ids, weights } = reelSymbolWeights(config, col, mode, comboStep);
+    return drawCapped(rng, ids, weights, caps, placed);
   };
 
   if (method === 'respin') {
@@ -98,7 +113,8 @@ export function runNaturalSpin(
     spinWinUnits += res.totalPay;
 
     if (cascading && res.wins.length > 0 && step < SAFE_CASCADE_CAP) {
-      grid = cascadeRefillGrid(config, rng, grid, res, mode);
+      // 1-based cascade iteration: the first refill is combo step 1.
+      grid = cascadeRefillGrid(config, rng, grid, res, mode, step + 1);
     } else {
       break;
     }

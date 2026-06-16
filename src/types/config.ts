@@ -201,6 +201,24 @@ export interface GameConfig {
   reelWeights?: Record<string, Record<number, Record<string, number>>>;
 
   /**
+   * 圖示數量上限 — at most `max` copies of `symbolId` may land on one board.
+   * Sources: 03_Symbols Max_Count (Use_Max) + 07_Constraints GLOBAL_MAX.
+   * `modes` restricts the cap to those mode labels (undefined / ['ALL'] = every
+   * mode). Enforced by the 'weight' draw (initial board + cascade refills); the
+   * most restrictive applicable cap wins per symbol.
+   */
+  symbolCaps?: { symbolId: string; max: number; modes?: string[] }[];
+
+  /**
+   * 連爆逐步權重 (08_Combo_Weights) — per-cascade-step weights.
+   *   comboWeights[mode][step][colIndex][symbolId] = weight
+   * `step` is the 1-based cascade iteration (first refill = step 1). Consulted
+   * only by cascade refills when 連爆 is enabled; overrides reelWeights/weight
+   * for that step, falling back when an entry is absent.
+   */
+  comboWeights?: Record<string, Record<number, Record<number, Record<string, number>>>>;
+
+  /**
    * "假盤" — spin-visual weight overrides, decoupled from the math weights.
    * When enabled, the spinning blur samples these instead of symbol weights.
    */

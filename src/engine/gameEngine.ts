@@ -383,7 +383,8 @@ export class GameEngine {
         this.log.cascadeId++;
         this.setState('CASCADE_RUNNING');
         this.log.emit('CASCADE', { kind, step: this.log.cascadeId });
-        grid = cascadeRefillGrid(this.config, this.rng, grid, res, mode);
+        // 1-based cascade iteration → 連爆逐步權重 (combo step 1 = first refill)
+        grid = cascadeRefillGrid(this.config, this.rng, grid, res, mode, step + 1);
       } else {
         break;
       }
