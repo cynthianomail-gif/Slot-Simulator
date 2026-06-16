@@ -295,9 +295,9 @@ export function SlotCanvas() {
         {/* Settled board — always rendered as the base layer. The spinning
             overlay below covers it until the reels land, so revealing it can
             never flash a different board. */}
-        <div className="flex" style={{ gap }}>
+        <div className="flex items-end" style={{ gap }}>
           {cells.map((column, col) => (
-            <div key={col} className="flex flex-col justify-center" style={{ gap, perspective: 800 }}>
+            <div key={col} className="flex flex-col justify-end" style={{ gap, perspective: 800 }}>
               {Array.from({ length: column.length }).map((_, i) => {
                 const row = column.length - 1 - i; // top first
                 const key = `${col}:${row}`;
@@ -341,10 +341,12 @@ export function SlotCanvas() {
           ))}
         </div>
 
-        {/* Spinning reels — overlaid exactly on top of the settled board
-            (left/top match the container's p-3 padding). */}
+        {/* Spinning reels — overlaid exactly over the settled board. Pinned to
+            the board's BOTTOM baseline (bottom/left = the p-3 padding) and
+            items-end, so reels of unequal height (不規則盤面) stay aligned with
+            the settled layer instead of floating. */}
         {showIntro && presentation && (
-          <div key={presentation.id} className="absolute left-3 top-3 flex" style={{ gap }}>
+          <div key={presentation.id} className="absolute bottom-3 left-3 flex items-end" style={{ gap }}>
             {presentation.steps[0].grid.columns.map((colArr, ci) => (
               <IntroColumn
                 key={ci}
