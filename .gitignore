@@ -6,3 +6,4 @@ dist-ssr
 !.vscode/extensions.json
 .DS_Store
 *.log
+backups/

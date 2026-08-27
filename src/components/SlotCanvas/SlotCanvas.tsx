@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { symbolStyle } from '@/lib/symbolStyle';
+import { SymbolFace } from '@/components/ui/symbolFace';
 import { symbolIndex } from '@/engine/wild';
 import { spinVisualWeights } from '@/engine/reel';
 import { cn, fmt, fmtInt } from '@/lib/utils';
@@ -120,19 +121,19 @@ export function SlotCanvas() {
         />
       );
     }
-    const style = symbolStyle(idx.get(id), id);
+    const sym = idx.get(id);
+    const style = symbolStyle(sym, id);
+    const base = 'flex items-center justify-center rounded-lg font-black';
+    const winRing = 'ring-4 ring-inset ring-yellow-300 shadow-md shadow-yellow-400/50';
     return (
-      <div
+      <SymbolFace
+        sym={sym}
+        id={id}
         style={{ width: size, height: size, fontSize: size * 0.5 }}
-        className={cn(
-          'flex items-center justify-center rounded-lg font-black shadow-md ring-2 ring-inset',
-          style.bg,
-          style.fg,
-          win ? 'ring-4 ring-yellow-300 shadow-yellow-400/50' : style.ring,
-        )}
-      >
-        {style.glyph}
-      </div>
+        // a picture carries its own art: no coloured ring, only the win highlight
+        className={cn(base, win && winRing)}
+        glyphClassName={cn(base, 'shadow-md ring-2 ring-inset', win ? winRing : style.ring)}
+      />
     );
   };
 

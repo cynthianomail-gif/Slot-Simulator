@@ -12,6 +12,7 @@ import { RotateCcw, Settings2, Palette, Layers, Zap, Crosshair, Timer } from 'lu
 
 export function ConfigPanel() {
   const resetConfig = useGameStore((s) => s.resetConfig);
+  const saveState = useGameStore((s) => s.configSaveState);
 
   return (
     <div className="flex h-full flex-col border-r border-border bg-card/40">
@@ -27,6 +28,14 @@ export function ConfigPanel() {
           </Button>
         </div>
       </div>
+
+      {saveState !== 'saved' && (
+        <div className="border-b border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-[11px] leading-tight text-amber-300">
+          {saveState === 'quota'
+            ? '瀏覽器儲存空間滿了，這一次的修改沒存起來 — 上傳的圖片太多或太大。請改用尺寸小一點的圖。'
+            : '這個瀏覽器不允許保存設定（可能是無痕視窗），重新整理後會回到預設值。'}
+        </div>
+      )}
 
       <Tabs defaultValue="general" className="flex min-h-0 flex-1 flex-col">
         <div className="border-b border-border/60 px-3 pt-2 pb-1">

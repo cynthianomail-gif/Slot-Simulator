@@ -2,7 +2,7 @@ import { useGameStore } from '@/store/gameStore';
 import { Section, NumField } from './fields';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/misc';
-import { symbolStyle } from '@/lib/symbolStyle';
+import { SymbolFace } from '@/components/ui/symbolFace';
 import { reelSymbolWeights } from '@/engine/reel';
 import type { GameConfig } from '@/types';
 
@@ -88,7 +88,6 @@ function FakeBoardSection() {
             </div>
             <div className="flex flex-wrap gap-1.5">
               {shares.map(({ id, pct }) => {
-                const st = symbolStyle(config.symbols.find((s) => s.id === id), id);
                 const val = custom
                   ? config.fakeReel?.weights[col]?.[id] ?? +pct.toFixed(2)
                   : pct;
@@ -98,9 +97,11 @@ function FakeBoardSection() {
                     className="flex items-center gap-1 rounded-md border border-border bg-background/40 px-1.5 py-1"
                     title={id}
                   >
-                    <span className={`grid h-5 w-5 place-items-center rounded text-[11px] font-bold ${st.bg} ${st.fg}`}>
-                      {st.glyph}
-                    </span>
+                    <SymbolFace
+                      sym={config.symbols.find((s) => s.id === id)}
+                      id={id}
+                      className="grid h-5 w-5 place-items-center overflow-hidden rounded text-[11px] font-bold"
+                    />
                     {custom ? (
                       <input
                         type="number"

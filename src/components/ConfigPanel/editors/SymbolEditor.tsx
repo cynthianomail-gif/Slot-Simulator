@@ -3,7 +3,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge, Switch } from '@/components/ui/misc';
 import { Section, ItemCard, Mini, parseNums, parseList } from './fields';
-import { symbolStyle } from '@/lib/symbolStyle';
+import { SymbolFace } from '@/components/ui/symbolFace';
+import { ImagePicker } from '@/components/ui/imagePicker';
 import { Plus, Trash2 } from 'lucide-react';
 import type { SymbolType } from '@/types';
 
@@ -42,13 +43,14 @@ export function SymbolEditor() {
       }
     >
       {symbols.map((sym, i) => {
-        const style = symbolStyle(sym, sym.id);
         return (
           <ItemCard key={i}>
             <div className="flex items-center gap-2">
-              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sm font-bold ${style.bg} ${style.fg}`}>
-                {style.glyph}
-              </div>
+              <SymbolFace
+                sym={sym}
+                id={sym.id}
+                className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md text-sm font-bold"
+              />
               <Input
                 className="h-8 w-20"
                 defaultValue={sym.id}
@@ -104,8 +106,12 @@ export function SymbolEditor() {
               <Mini label="類型（逗號分隔）" className="col-span-2">
                 <Input className="h-8" defaultValue={sym.type.join(', ')} onBlur={(e) => update((c) => { c.symbols[i].type = parseList(e.target.value) as SymbolType[]; })} />
               </Mini>
-              <Mini label="圖片網址" className="col-span-2">
-                <Input className="h-8" defaultValue={sym.image ?? ''} onBlur={(e) => update((c) => { c.symbols[i].image = e.target.value || undefined; })} />
+              <Mini label="圖片（上傳檔案或貼網址）" className="col-span-2">
+                <ImagePicker
+                  key={sym.image?.startsWith('data:') ? 'file' : 'url'}
+                  value={sym.image}
+                  onChange={(next) => update((c) => { c.symbols[i].image = next; })}
+                />
               </Mini>
               <Mini label="屬性標籤（功能外掛用，逗號分隔）" className="col-span-2">
                 <Input className="h-8" defaultValue={(sym.properties ?? []).join(', ')} onBlur={(e) => update((c) => { c.symbols[i].properties = parseList(e.target.value); })} />

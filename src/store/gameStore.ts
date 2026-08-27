@@ -122,6 +122,8 @@ interface GameStore {
   resetConfig: () => void;
   /** Replace the whole config (e.g. from an imported設定檔) and re-init. */
   loadConfig: (config: GameConfig) => void;
+  /** Result of the last attempt to save the config into this browser. */
+  configSaveState: ConfigSaveState;
   startAuto: (count: number | 'inf') => void;
   stopAuto: () => void;
   startSim: (rounds: number) => Promise<void>;
@@ -155,6 +157,58 @@ function persistSeeds(list: { name: string; seed: number }[]): void {
   }
 }
 
+/**
+ * The whole game config is kept in this browser so a reload doesn't throw away
+ * hand-tuned numbers or uploaded symbol pictures. Bump the key when the config
+ * shape changes incompatibly — an old payload then simply doesn't load.
+ */
+const CONFIG_KEY = 'slot.config.v1';
+
+/** Whether the last write to browser storage got through. */
+export type ConfigSaveState = 'saved' | 'quota' | 'unavailable';
+
+function dropSavedConfig(): void {
+  try {
+    localStorage.removeItem(CONFIG_KEY);
+  } catch {
+    /* nothing we can do */
+  }
+}
+
+/**
+ * Load the stored config, or null when there is none / it is unusable. A
+ * payload written by an older build must never white-screen the app, so it is
+ * shape-checked AND fed through the engine before it is trusted.
+ */
+function loadSavedConfig(): GameConfig | null {
+  let parsed: GameConfig;
+  try {
+    const raw = localStorage.getItem(CONFIG_KEY);
+    if (!raw) return null;
+    parsed = JSON.parse(raw) as GameConfig;
+    if (!parsed || !Array.isArray(parsed.symbols) || !parsed.symbols.length || !parsed.grid || !parsed.pay) {
+      dropSavedConfig();
+      return null;
+    }
+    createSession(parsed, 0); // throws if the engine can't consume it
+  } catch {
+    dropSavedConfig();
+    return null;
+  }
+  return parsed;
+}
+
+function persistConfig(config: GameConfig): ConfigSaveState {
+  try {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+    return 'saved';
+  } catch (e) {
+    // usually QuotaExceededError: uploaded symbol pictures outgrew the ~5 MB budget
+    const quota = e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22);
+    return quota ? 'quota' : 'unavailable';
+  }
+}
+
 /** One pot sitting ABOVE a reel. Persistent while 假收集 is enabled. */
 export interface CollectPot {
   col: number; // reel index the pot sits above
@@ -162,7 +216,8 @@ export interface CollectPot {
 }
 
 /* module-scoped, non-reactive handles */
-let session: Session = createSession(defaultConfig, 0);
+const initialConfig: GameConfig = loadSavedConfig() ?? clone(defaultConfig);
+let session: Session = createSession(initialConfig, 0);
 let liveStats = new StatisticsEngine();
 let presentationSeq = 0;
 let pendingRound: RoundResult | null = null;
@@ -318,19 +373,20 @@ export const useGameStore = create<GameStore>((set, get) => {
   };
 
   return {
-  config: clone(defaultConfig),
+  config: initialConfig,
+  configSaveState: 'saved',
   useFixedSeed: false,
   seed: 123456,
 
-  balance: defaultConfig.user.balance,
-  bet: defaultConfig.bet.default,
+  balance: initialConfig.user.balance,
+  bet: initialConfig.bet.default,
   speed: 'normal',
   animationEnabled: true,
 
   state: 'IDLE',
   featureState: 'INACTIVE',
   spinning: false,
-  displayGrid: emptyGrid(defaultConfig.grid.shape, 'LJ'),
+  displayGrid: emptyGrid(initialConfig.grid.shape, 'LJ'),
   presentation: null,
   featureLabel: null,
   roundWin: 0,
@@ -631,7 +687,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       }
     }
 
-    set({ config: next });
+    set({ config: next, configSaveState: persistConfig(next) });
     // rebuild engine session against new config (keeps seed mode)
     const { useFixedSeed, seed } = get();
     session = createSession(next, useFixedSeed ? seed : null);
@@ -643,14 +699,17 @@ export const useGameStore = create<GameStore>((set, get) => {
   },
 
   resetConfig: () => {
-    set({ config: clone(defaultConfig) });
+    dropSavedConfig();
+    set({ config: clone(defaultConfig), configSaveState: 'saved' });
     get().init();
   },
 
   loadConfig: (config) => {
     // stop any auto/sim playback before swapping the whole game out
+    const next = clone(config);
     set({
-      config: clone(config),
+      config: next,
+      configSaveState: persistConfig(next),
       autoInfinite: false,
       autoRemaining: 0,
       cheats: { armedTriggers: [], forceMaxWin: false, maxWinX: 5000 },
